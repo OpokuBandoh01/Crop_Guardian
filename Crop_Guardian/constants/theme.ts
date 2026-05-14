@@ -11,11 +11,17 @@ const tintColorDark = '#fff';
 export const Colors = {
   light: {
     text: '#11181C',
-    background: '#fff',
+    background: '#FFFFE7', // Cream background from design
     tint: tintColorLight,
-    icon: '#687076',
+    icon: '#094A04', // Primary dark green
     tabIconDefault: '#687076',
     tabIconSelected: tintColorLight,
+    primary: '#094A04', // Dark green for buttons and text
+    inputBorder: '#094A04',
+    placeholder: '#9CA3AF',
+    logoBackground: '#C1E1C1', // Light green behind the leaf logo
+    surface: '#FFFFFF',
+    error: '#EF4444',
   },
   dark: {
     text: '#ECEDEE',
@@ -24,6 +30,12 @@ export const Colors = {
     icon: '#9BA1A6',
     tabIconDefault: '#9BA1A6',
     tabIconSelected: tintColorDark,
+    primary: '#4ADE80', // Lighter green for dark mode
+    inputBorder: '#4B5563',
+    placeholder: '#6B7280',
+    logoBackground: '#2E3D30',
+    surface: '#1F2937',
+    error: '#F87171',
   },
 };
 

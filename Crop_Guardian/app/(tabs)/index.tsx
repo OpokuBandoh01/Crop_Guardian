@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, TouchableOpacity } from 'react-native';
 
 import { HelloWave } from '@/components/hello-wave';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
@@ -63,6 +63,14 @@ export default function HomeScreen() {
         <ThemedText>
           {`Tap the Explore tab to learn more about what's included in this starter app.`}
         </ThemedText>
+      </ThemedView>
+      <ThemedView style={styles.stepContainer}>
+        <ThemedText type="subtitle">Step 3: Test New Screens</ThemedText>
+        <Link href="/scan" asChild>
+          <TouchableOpacity style={{ padding: 10, backgroundColor: '#094A04', borderRadius: 8, alignItems: 'center' }}>
+            <ThemedText style={{ color: '#fff' }}>Go to Scan Screen</ThemedText>
+          </TouchableOpacity>
+        </Link>
       </ThemedView>
       <ThemedView style={styles.stepContainer}>
         <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>

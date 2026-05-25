@@ -1,106 +1,848 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet, TouchableOpacity } from 'react-native';
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  Dimensions
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
+import { useRouter } from 'expo-router';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+
+const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const router = useRouter();
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Test New Screens</ThemedText>
-        <Link href="/scan" asChild>
-          <TouchableOpacity style={{ padding: 10, backgroundColor: '#094A04', borderRadius: 8, alignItems: 'center' }}>
-            <ThemedText style={{ color: '#fff' }}>Go to Scan Screen</ThemedText>
+  return (
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+
+        {/* ================= HEADER SECTION ================= */}
+        <View style={styles.headerContainer}>
+          <View style={styles.headerLeft}>
+            <View style={styles.greetingRow}>
+              <Text style={[styles.greetingText, { color: theme.text }]}>Good morning, Kofi!</Text>
+              <Image
+                source={require('@/assets/icons/seedlingicon.png')}
+                style={styles.seedlingIcon}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={[styles.subtitleText, { color: theme.icon }]}>
+              Let's make today a productive{'\n'} day on your farm.
+            </Text>
+          </View>
+
+          <TouchableOpacity style={styles.notificationButton} activeOpacity={0.7}>
+            <Ionicons name="notifications-outline" size={moderateScale(24)} color={theme.primary} />
           </TouchableOpacity>
-        </Link>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        </View>
+
+        {/* ================= WEATHER SECTION ================= */}
+        <View style={[styles.weatherWidget, { backgroundColor: colorScheme === 'light' ? '#EBF7E9' : '#1E2C20' }]}>
+          <View style={styles.weatherLeft}>
+            <Text style={[styles.weatherLocation, { color: theme.text }]}>Kumasi, Ashanti</Text>
+
+            <View style={styles.tempRow}>
+              <Ionicons
+                name="rainy-outline"
+                size={moderateScale(38)}
+                color={theme.primary}
+                style={styles.weatherStateIcon}
+              />
+              <Text style={[styles.tempText, { color: theme.text }]}>28°C</Text>
+            </View>
+
+            <Text style={[styles.weatherDesc, { color: theme.text }]}>Light rain expected at 4PM</Text>
+
+            <TouchableOpacity
+              style={[styles.forecastButton, { backgroundColor: colorScheme === 'light' ? '#C8E6C9' : '#2E3D30' }]}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.forecastButtonText, { color: theme.primary }]}>View full forecast</Text>
+              <Ionicons name="chevron-forward" size={moderateScale(12)} color={theme.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Vertical divider line */}
+          <View style={[styles.weatherDivider, { backgroundColor: colorScheme === 'light' ? '#D0E9CD' : '#2E3D30' }]} />
+
+          <View style={styles.weatherRight}>
+            {/* Humidity */}
+            <View style={styles.weatherStatItem}>
+              <Ionicons name="water-outline" size={moderateScale(18)} color={theme.primary} />
+              <View style={styles.weatherStatTextWrapper}>
+                <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>Humidity</Text>
+                <Text style={[styles.weatherStatValue, { color: theme.text }]}>70%</Text>
+              </View>
+            </View>
+
+            {/* Wind */}
+            <View style={styles.weatherStatItem}>
+              <Ionicons name="leaf-outline" size={moderateScale(18)} color={theme.primary} />
+              <View style={styles.weatherStatTextWrapper}>
+                <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>Wind</Text>
+                <Text style={[styles.weatherStatValue, { color: theme.text }]}>Moderate</Text>
+              </View>
+            </View>
+
+            {/* Feels like */}
+            <View style={styles.weatherStatItem}>
+              <Ionicons name="thermometer-outline" size={moderateScale(18)} color={theme.primary} />
+              <View style={styles.weatherStatTextWrapper}>
+                <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>Feels like</Text>
+                <Text style={[styles.weatherStatValue, { color: theme.text }]}>30°C</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* ================= DISEASE SCAN BANNER ================= */}
+        <View style={styles.scanBanner}>
+          {/* Background image on the right */}
+          <Image
+            source={require('@/assets/images/leafimage.png')}
+            style={styles.scanBannerBg}
+            resizeMode="cover"
+          />
+          {/* Subtle gradient overlay using dark green transparency */}
+          <View style={styles.scanBannerBgOverlay} />
+
+          {/* Left Contents */}
+          <View style={styles.scanLeftContent}>
+            <Text style={styles.scanTitle}>Scan Your Crop{'\n'}for Diseases</Text>
+            <Text style={styles.scanSubtitle}>Get instant AI diagnosis and recommended solutions</Text>
+
+            {/* Quick scanning triggers */}
+            <View style={styles.scanActionContainer}>
+              <TouchableOpacity
+                style={styles.scanActionButtonSolid}
+                onPress={() => router.push('/scan')}
+                activeOpacity={0.9}
+              >
+                <Ionicons name="camera" size={moderateScale(16)} color="#094A04" style={styles.scanActionIcon} />
+                <Text style={styles.scanActionTextSolid}>Take photo</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.scanActionButtonOutline}
+                onPress={() => console.log('Upload image from gallery')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="image-outline" size={moderateScale(16)} color="#FFFFFF" style={styles.scanActionIcon} />
+                <Text style={styles.scanActionTextOutline}>Upload Image</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Right Camera Overlay */}
+          <View style={styles.scanRightOverlay}>
+            <Image
+              source={require('@/assets/icons/bigcameraicon.png')}
+              style={styles.bigCameraIcon}
+              resizeMode="contain"
+            />
+          </View>
+        </View>
+
+        {/* ================= FARM HEALTH OVERVIEW ================= */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionHeaderTitleWrapper}>
+            <Image
+              source={require('@/assets/icons/seedlingicon.png')}
+              style={[styles.sectionHeaderIcon, { tintColor: theme.primary }]}
+              resizeMode="contain"
+            />
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Farm Health Overview</Text>
+          </View>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/my-crops')}>
+            <Text style={[styles.viewAllLink, { color: theme.icon }]}>View My Crops</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Horizontal cards layout for crop statuses */}
+        <View style={styles.overviewCardsRow}>
+          {/* Maize Card */}
+          <View style={[styles.overviewCard, { backgroundColor: colorScheme === 'light' ? '#EBF7E9' : '#1E2C20' }]}>
+            <View style={styles.overviewCardHeader}>
+              <Image
+                source={require('@/assets/icons/maizeicon.png')}
+                style={styles.cropIcon}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={[styles.cropNameText, { color: theme.text }]}>Maize</Text>
+            <Text style={styles.cropStatusHealthy}>Healthy</Text>
+            <Text style={[styles.cropConditionSub, { color: theme.icon }]}>Good condition</Text>
+          </View>
+
+          {/* Cassava Card */}
+          <View style={[styles.overviewCard, { backgroundColor: colorScheme === 'light' ? '#FFFCE2' : '#2D2B1C' }]}>
+            <View style={styles.overviewCardHeader}>
+              <Image
+                source={require('@/assets/icons/cassavaicon.png')}
+                style={styles.cropIcon}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={[styles.cropNameText, { color: theme.text }]}>Cassava</Text>
+            <Text style={styles.cropStatusWarning}>Needs attention</Text>
+            <Text style={[styles.cropConditionSub, { color: theme.icon }]}>Check now</Text>
+          </View>
+
+          {/* Alerts Card */}
+          <View style={[styles.overviewCard, { backgroundColor: '#FEE5F5' }]}>
+            <View style={styles.overviewCardHeader}>
+              <View style={[styles.alertIconBg, { backgroundColor: '#E480C8' }]}>
+                <Image
+                  source={require('@/assets/icons/alerticon.png')}
+                  style={styles.cropIcon}
+                  resizeMode="contain"
+                />
+              </View>
+            </View>
+            <Text style={[styles.cropNameText, { color: '#11181C' }]}>2 Alerts</Text>
+            <Text style={styles.cropStatusAlert}>This week</Text>
+            <Text style={[styles.cropConditionSub, { color: '#687076' }]}>Tap to view</Text>
+          </View>
+        </View>
+
+        {/* ================= QUICK ACTIONS ================= */}
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Quick Actions</Text>
+          <TouchableOpacity activeOpacity={0.7}>
+            <Text style={[styles.viewAllLink, { color: theme.icon }]}>See all <Ionicons name="chevron-forward" size={moderateScale(10)} /></Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick action grid items */}
+        <View style={styles.quickActionsRow}>
+          <TouchableOpacity
+            style={[styles.quickActionBtn, { borderColor: theme.inputBorder, backgroundColor: theme.surface }]}
+            onPress={() => router.push('/scan')}
+            activeOpacity={0.8}
+          >
+            <Image
+              source={require('@/assets/icons/scancropsicon.png')}
+              style={styles.quickActionIcon}
+              resizeMode="contain"
+            />
+            <Text style={[styles.quickActionText, { color: theme.text }]}>Scan crop</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.quickActionBtn, { borderColor: theme.inputBorder, backgroundColor: theme.surface }]}
+            activeOpacity={0.8}
+          >
+            <Image
+              source={require('@/assets/icons/weathericon.png')}
+              style={styles.quickActionIcon}
+              resizeMode="contain"
+            />
+            <Text style={[styles.quickActionText, { color: theme.text }]}>Weather</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.quickActionBtn, { borderColor: theme.inputBorder, backgroundColor: theme.surface }]}
+            activeOpacity={0.8}
+          >
+            <Image
+              source={require('@/assets/icons/tipsicon.png')}
+              style={styles.quickActionIcon}
+              resizeMode="contain"
+            />
+            <Text style={[styles.quickActionText, { color: theme.text }]}>Tips</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.quickActionBtn, { borderColor: theme.inputBorder, backgroundColor: theme.surface }]}
+            onPress={() => router.push('/my-crops')}
+            activeOpacity={0.8}
+          >
+            <Image
+              source={require('@/assets/icons/mycropsicon.png')}
+              style={styles.quickActionIcon}
+              resizeMode="contain"
+            />
+            <Text style={[styles.quickActionText, { color: theme.text }]}>My Crops</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ================= HORIZONTAL SCROLLABLE SECTION ================= */}
+        {/* Scrollable list at bottom for Daily Tip, Recent Scan, Weather Alert */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.horizontalScrollView}
+          contentContainerStyle={styles.horizontalScrollContent}
+        >
+          {/* Card 1: Daily Tip */}
+          <View style={[styles.bottomCard, styles.dailyTipCard]}>
+            {/* Split layout inside */}
+            <View style={styles.dailyTipLeft}>
+              <View style={styles.cardHeaderRow}>
+                <Ionicons name="bulb-outline" size={moderateScale(16)} color="#094A04" style={styles.cardHeaderIcon} />
+                <Text style={styles.dailyTipHeaderTitle}>Daily Tip</Text>
+              </View>
+              <Text style={styles.dailyTipBody}>
+                Water your maize in the evening for better absorbtion
+              </Text>
+            </View>
+
+            {/* D9D9D9 Blend separator */}
+            <View style={styles.blendBorder} />
+
+            <View style={styles.dailyTipRight}>
+              <Image
+                source={require('@/assets/images/dailytipimage.png')}
+                style={styles.dailyTipImage}
+                resizeMode="cover"
+              />
+            </View>
+          </View>
+
+          {/* Card 2: Recent Scan */}
+          <View style={[styles.bottomCard, styles.recentScanCard, { backgroundColor: '#E1F8DE' }]}>
+            <View style={styles.recentScanHeader}>
+              <Text style={styles.recentScanTitle}>Recent Scan</Text>
+              <TouchableOpacity activeOpacity={0.7} style={styles.seeAllRecentRow}>
+                <Text style={styles.recentScanSeeAll}>See all</Text>
+                <Ionicons name="chevron-forward" size={moderateScale(10)} color="#2E7D32" />
+              </TouchableOpacity>
+            </View>
+
+            <Image
+              source={require('@/assets/images/recentscanimage.png')}
+              style={styles.recentScanImage}
+              resizeMode="cover"
+            />
+
+            <View style={styles.recentScanDetails}>
+              <Text style={styles.recentScanDisease}>Maize Leaf Blight</Text>
+              <Text style={styles.recentScanConfidence}>High Confidence</Text>
+              <Text style={styles.recentScanTime}>Scan today, 8:30AM</Text>
+            </View>
+          </View>
+
+          {/* Card 3: Weather Alert */}
+          <View style={[styles.bottomCard, styles.weatherAlertCard, { backgroundColor: '#D3E8E9' }]}>
+            <View style={styles.weatherAlertHeader}>
+              <Image
+                source={require('@/assets/icons/weatheralerticon.png')}
+                style={styles.weatherAlertIcon}
+                resizeMode="contain"
+              />
+              <Text style={styles.weatherAlertTitle}>Weather Alert</Text>
+            </View>
+
+            <Text style={styles.weatherAlertText}>
+              Heavy rainfall expected tomorrow.
+            </Text>
+
+            <TouchableOpacity style={styles.weatherAlertLink} activeOpacity={0.8}>
+              <Text style={styles.weatherAlertLinkText}>Stay prepared</Text>
+              <Ionicons name="chevron-forward" size={moderateScale(12)} color="#005B66" />
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  safeArea: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: scale(16),
+    paddingTop: verticalScale(12),
+    // Padding bottom at 95 to account for floating bottom navigation capsule
+    paddingBottom: verticalScale(100),
+  },
+
+  // Header Section
+  headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: verticalScale(16),
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  headerLeft: {
+    flex: 1,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  greetingText: {
+    fontSize: moderateScale(22),
+    fontWeight: '700',
+  },
+  seedlingIcon: {
+    width: moderateScale(20),
+    height: moderateScale(20),
+    marginLeft: scale(6),
+  },
+  subtitleText: {
+    fontSize: moderateScale(13),
+    marginTop: verticalScale(4),
+    fontWeight: '400',
+  },
+  notificationButton: {
+    padding: scale(6),
+  },
+
+  // Weather Section
+  weatherWidget: {
+    flexDirection: 'row',
+    borderRadius: moderateScale(16),
+    padding: scale(16),
+    marginBottom: verticalScale(20),
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  weatherLeft: {
+    flex: 1.1,
+    justifyContent: 'center',
+  },
+  weatherLocation: {
+    fontSize: moderateScale(12),
+    fontWeight: '600',
+    opacity: 0.8,
+  },
+  tempRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: verticalScale(6),
+  },
+  weatherStateIcon: {
+    marginRight: scale(8),
+  },
+  tempText: {
+    fontSize: moderateScale(34),
+    fontWeight: '700',
+  },
+  weatherDesc: {
+    fontSize: moderateScale(12),
+    fontWeight: '500',
+    marginBottom: verticalScale(10),
+  },
+  forecastButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(5),
+    borderRadius: moderateScale(12),
+  },
+  forecastButtonText: {
+    fontSize: moderateScale(11),
+    fontWeight: '600',
+    marginRight: scale(4),
+  },
+  weatherDivider: {
+    width: 1,
+    height: '80%',
+    marginHorizontal: scale(12),
+  },
+  weatherRight: {
+    flex: 0.9,
+    gap: verticalScale(10),
+  },
+  weatherStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  weatherStatTextWrapper: {
+    marginLeft: scale(8),
+  },
+  weatherStatLabel: {
+    fontSize: moderateScale(10),
+    fontWeight: '400',
+  },
+  weatherStatValue: {
+    fontSize: moderateScale(12),
+    fontWeight: '700',
+  },
+
+  // Scan Banner Section
+  scanBanner: {
+    height: verticalScale(165),
+    borderRadius: moderateScale(16),
+    backgroundColor: '#094A04',
+    flexDirection: 'row',
+    overflow: 'hidden',
+    marginBottom: verticalScale(20),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  scanBannerBg: {
     position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: '60%',
+    height: '100%',
+  },
+  scanBannerBgOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(9, 74, 4, 0.4)', // Fades leaf into the green color
+  },
+  scanLeftContent: {
+    flex: 1.2,
+    zIndex: 2,
+    paddingLeft: scale(16),
+    justifyContent: 'center',
+  },
+  scanTitle: {
+    fontSize: moderateScale(19),
+    fontWeight: '700',
+    color: '#FFFFFF',
+    lineHeight: verticalScale(23),
+  },
+  scanSubtitle: {
+    fontSize: moderateScale(11),
+    color: '#E2F5E1',
+    marginTop: verticalScale(6),
+    marginBottom: verticalScale(12),
+    paddingRight: scale(10),
+  },
+  scanActionContainer: {
+    gap: verticalScale(8),
+  },
+  scanActionButtonSolid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: verticalScale(6),
+    paddingHorizontal: scale(12),
+    borderRadius: moderateScale(6),
+    alignSelf: 'flex-start',
+  },
+  scanActionIcon: {
+    marginRight: scale(6),
+  },
+  scanActionTextSolid: {
+    color: '#094A04',
+    fontSize: moderateScale(12),
+    fontWeight: '700',
+  },
+  scanActionButtonOutline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    paddingVertical: verticalScale(5),
+    paddingHorizontal: scale(12),
+    borderRadius: moderateScale(6),
+    alignSelf: 'flex-start',
+  },
+  scanActionTextOutline: {
+    color: '#FFFFFF',
+    fontSize: moderateScale(12),
+    fontWeight: '600',
+  },
+  scanRightOverlay: {
+    flex: 0.8,
+    zIndex: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bigCameraIcon: {
+    width: moderateScale(80),
+    height: moderateScale(80),
+    opacity: 0.85,
+  },
+
+  // Sections Common Headers
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: verticalScale(12),
+    marginTop: verticalScale(8),
+  },
+  sectionHeaderTitleWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sectionHeaderIcon: {
+    width: moderateScale(16),
+    height: moderateScale(16),
+    marginRight: scale(6),
+  },
+  sectionTitle: {
+    fontSize: moderateScale(16),
+    fontWeight: '700',
+  },
+  viewAllLink: {
+    fontSize: moderateScale(12),
+    fontWeight: '600',
+  },
+
+  // Farm Health Overview
+  overviewCardsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: scale(8),
+    marginBottom: verticalScale(20),
+  },
+  overviewCard: {
+    flex: 1,
+    borderRadius: moderateScale(12),
+    padding: scale(10),
+    minHeight: verticalScale(110),
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  overviewCardHeader: {
+    alignSelf: 'flex-start',
+  },
+  alertIconBg: {
+    width: moderateScale(26),
+    height: moderateScale(26),
+    borderRadius: moderateScale(13),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cropIcon: {
+    width: moderateScale(24),
+    height: moderateScale(24),
+  },
+  cropNameText: {
+    fontSize: moderateScale(13),
+    fontWeight: '700',
+    marginTop: verticalScale(4),
+  },
+  cropStatusHealthy: {
+    fontSize: moderateScale(12),
+    fontWeight: '700',
+    color: '#2E7D32',
+    marginVertical: verticalScale(2),
+  },
+  cropStatusWarning: {
+    fontSize: moderateScale(11),
+    fontWeight: '700',
+    color: '#E4A11B',
+    marginVertical: verticalScale(2),
+  },
+  cropStatusAlert: {
+    fontSize: moderateScale(12),
+    fontWeight: '700',
+    color: '#C2185B',
+    marginVertical: verticalScale(2),
+  },
+  cropConditionSub: {
+    fontSize: moderateScale(10),
+    fontWeight: '400',
+  },
+
+  // Quick Actions Grid
+  quickActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: scale(8),
+    marginBottom: verticalScale(20),
+  },
+  quickActionBtn: {
+    flex: 1,
+    height: verticalScale(64),
+    borderRadius: moderateScale(12),
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  quickActionIcon: {
+    width: moderateScale(22),
+    height: moderateScale(22),
+    marginBottom: verticalScale(4),
+  },
+  quickActionText: {
+    fontSize: moderateScale(11),
+    fontWeight: '600',
+  },
+
+  // Bottom Scrollable Section
+  horizontalScrollView: {
+    marginHorizontal: scale(-16), // Stretch back to full width for seamless scrolling
+  },
+  horizontalScrollContent: {
+    paddingHorizontal: scale(16),
+    gap: scale(12),
+    paddingBottom: verticalScale(8),
+  },
+  bottomCard: {
+    height: verticalScale(140),
+    borderRadius: moderateScale(12),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+
+  // Card 1: Daily Tip
+  dailyTipCard: {
+    width: scale(280),
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    overflow: 'hidden',
+  },
+  dailyTipLeft: {
+    flex: 1.4,
+    padding: scale(12),
+    justifyContent: 'center',
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: verticalScale(6),
+  },
+  cardHeaderIcon: {
+    marginRight: scale(6),
+  },
+  dailyTipHeaderTitle: {
+    fontSize: moderateScale(13),
+    fontWeight: '700',
+    color: '#11181C',
+  },
+  dailyTipBody: {
+    fontSize: moderateScale(11.5),
+    color: '#4B5563',
+    lineHeight: verticalScale(16),
+  },
+  blendBorder: {
+    width: 2,
+    height: '100%',
+    backgroundColor: '#D9D9D9',
+  },
+  dailyTipRight: {
+    flex: 1,
+    height: '100%',
+  },
+  dailyTipImage: {
+    width: '100%',
+    height: '100%',
+  },
+
+  // Card 2: Recent Scan
+  recentScanCard: {
+    width: scale(210),
+    padding: scale(12),
+    justifyContent: 'space-between',
+  },
+  recentScanHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  recentScanTitle: {
+    fontSize: moderateScale(12),
+    fontWeight: '700',
+    color: '#094A04',
+  },
+  seeAllRecentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recentScanSeeAll: {
+    fontSize: moderateScale(10),
+    color: '#2E7D32',
+    fontWeight: '600',
+    marginRight: scale(2),
+  },
+  recentScanImage: {
+    height: verticalScale(50),
+    width: '100%',
+    borderRadius: moderateScale(6),
+    marginVertical: verticalScale(4),
+  },
+  recentScanDetails: {
+    gap: verticalScale(1),
+  },
+  recentScanDisease: {
+    fontSize: moderateScale(12),
+    fontWeight: '700',
+    color: '#11181C',
+  },
+  recentScanConfidence: {
+    fontSize: moderateScale(10.5),
+    color: '#2E7D32',
+    fontWeight: '600',
+  },
+  recentScanTime: {
+    fontSize: moderateScale(9.5),
+    color: '#687076',
+  },
+
+  // Card 3: Weather Alert
+  weatherAlertCard: {
+    width: scale(210),
+    padding: scale(12),
+    justifyContent: 'space-between',
+  },
+  weatherAlertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  weatherAlertIcon: {
+    width: moderateScale(20),
+    height: moderateScale(20),
+    marginRight: scale(6),
+  },
+  weatherAlertTitle: {
+    fontSize: moderateScale(12),
+    fontWeight: '700',
+    color: '#005B66',
+  },
+  weatherAlertText: {
+    fontSize: moderateScale(11.5),
+    color: '#1F2937',
+    lineHeight: verticalScale(16),
+  },
+  weatherAlertLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  weatherAlertLinkText: {
+    fontSize: moderateScale(11.5),
+    fontWeight: '700',
+    color: '#005B66',
+    marginRight: scale(4),
   },
 });

@@ -71,6 +71,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={[styles.forecastButton, { backgroundColor: colorScheme === 'light' ? '#C8E6C9' : '#2E3D30' }]}
               activeOpacity={0.8}
+              onPress={() => router.push('/weather')}
             >
               <Text style={[styles.forecastButtonText, { color: theme.primary }]}>View full forecast</Text>
               <Ionicons name="chevron-forward" size={moderateScale(12)} color={theme.primary} />
@@ -246,6 +247,7 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={[styles.quickActionBtn, { borderColor: theme.inputBorder, backgroundColor: theme.surface }]}
             activeOpacity={0.8}
+            onPress={() => router.push('/weather')}
           >
             <Image
               source={require('@/assets/icons/weathericon.png')}

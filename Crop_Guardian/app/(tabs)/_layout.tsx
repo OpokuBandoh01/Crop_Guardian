@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { View, StyleSheet, Image } from 'react-native';
+import { View, StyleSheet, Image, Text } from 'react-native';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 
 import { HapticTab } from '@/components/haptic-tab';
@@ -26,13 +26,16 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ focused, color }) => (
-            <View style={styles.iconWrapper}>
-              <Image
-                source={require('@/assets/icons/homeicon.png')}
-                style={[styles.tabIcon, { tintColor: color }]}
-                resizeMode="contain"
-              />
+          tabBarIcon: ({ color }) => (
+            <Image
+              source={require('@/assets/icons/homeicon.png')}
+              style={[styles.tabIcon, { tintColor: color }]}
+              resizeMode="contain"
+            />
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <View style={styles.labelWrapper}>
+              <Text style={[styles.tabLabel, { color }]}>Home</Text>
               {focused && <View style={styles.activeDot} />}
             </View>
           ),
@@ -43,13 +46,16 @@ export default function TabLayout() {
         name="my-crops"
         options={{
           title: 'My Crops',
-          tabBarIcon: ({ focused, color }) => (
-            <View style={styles.iconWrapper}>
-              <Image
-                source={require('@/assets/icons/mycropstabicon.png')}
-                style={[styles.tabIcon, { tintColor: color }]}
-                resizeMode="contain"
-              />
+          tabBarIcon: ({ color }) => (
+            <Image
+              source={require('@/assets/icons/mycropstabicon.png')}
+              style={[styles.tabIcon, { tintColor: color }]}
+              resizeMode="contain"
+            />
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <View style={styles.labelWrapper}>
+              <Text style={[styles.tabLabel, { color }]}>My Crops</Text>
               {focused && <View style={styles.activeDot} />}
             </View>
           ),
@@ -60,13 +66,16 @@ export default function TabLayout() {
         name="alerts"
         options={{
           title: 'Alerts',
-          tabBarIcon: ({ focused, color }) => (
-            <View style={styles.iconWrapper}>
-              <Image
-                source={require('@/assets/icons/alertstabicon.png')}
-                style={[styles.tabIcon, { tintColor: color }]}
-                resizeMode="contain"
-              />
+          tabBarIcon: ({ color }) => (
+            <Image
+              source={require('@/assets/icons/alertstabicon.png')}
+              style={[styles.tabIcon, { tintColor: color }]}
+              resizeMode="contain"
+            />
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <View style={styles.labelWrapper}>
+              <Text style={[styles.tabLabel, { color }]}>Alerts</Text>
               {focused && <View style={styles.activeDot} />}
             </View>
           ),
@@ -77,13 +86,16 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ focused, color }) => (
-            <View style={styles.iconWrapper}>
-              <Image
-                source={require('@/assets/icons/profileicon.png')}
-                style={[styles.tabIcon, { tintColor: color }]}
-                resizeMode="contain"
-              />
+          tabBarIcon: ({ color }) => (
+            <Image
+              source={require('@/assets/icons/profileicon.png')}
+              style={[styles.tabIcon, { tintColor: color }]}
+              resizeMode="contain"
+            />
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <View style={styles.labelWrapper}>
+              <Text style={[styles.tabLabel, { color }]}>Profile</Text>
               {focused && <View style={styles.activeDot} />}
             </View>
           ),
@@ -125,6 +137,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: verticalScale(2),
   },
+  labelWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   iconWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -138,7 +154,7 @@ const styles = StyleSheet.create({
     height: moderateScale(4),
     borderRadius: moderateScale(2),
     backgroundColor: '#FFFFFF',
-    marginTop: verticalScale(4),
+    marginTop: verticalScale(2),
   },
 });
 

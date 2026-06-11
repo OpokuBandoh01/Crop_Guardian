@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -25,8 +26,13 @@ export default function UserRoleScreen() {
   const theme = Colors[colorScheme];
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (selectedRole) {
+      try {
+        await AsyncStorage.setItem('onboarding_role', selectedRole.toUpperCase());
+      } catch (err) {
+        console.error('Error saving onboarding role:', err);
+      }
       router.push('/crop-selection');
     }
   };

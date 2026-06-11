@@ -48,7 +48,7 @@ export default function VerifyEmailScreen() {
 
         {/* Footer Link */}
         <View style={styles.footerContainer}>
-          <Text style={[styles.footerText, { color: theme.text }]}>Didn't you receive any code? </Text>
+          <Text style={[styles.footerText, { color: theme.text }]}>{"Didn't you receive any code? "}</Text>
           <TouchableOpacity onPress={() => console.log('Resend code')}>
             <Text style={[styles.footerLink, { color: theme.primary }]}>Resend code</Text>
           </TouchableOpacity>

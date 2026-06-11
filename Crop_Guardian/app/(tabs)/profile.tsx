@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import API from '@/services/api';
 import { BlurView } from 'expo-blur';
 
 import { Colors } from '@/constants/theme';
@@ -19,9 +21,35 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [userData, setUserData] = useState<any>(null);
+
+  const fetchUserData = async () => {
+    try {
+      const cached = await AsyncStorage.getItem('userData');
+      if (cached) {
+        setUserData(JSON.parse(cached));
+      }
+      const res = await API.get('/api/auth/me');
+      if (res.data?.success && res.data.user) {
+        setUserData(res.data.user);
+        await AsyncStorage.setItem('userData', JSON.stringify(res.data.user));
+      }
+    } catch (err) {
+      console.warn('Error fetching me in profile:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUserData();
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchUserData();
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const handlePress = (screen: string) => {
     if (screen === 'Log Out') {
@@ -155,18 +183,24 @@ export default function ProfileScreen() {
 
             {/* Farmer Info */}
             <View style={styles.farmerInfo}>
-              <Text style={styles.farmerName}>Kofi Mensah</Text>
+              <Text style={styles.farmerName}>{userData?.profile?.fullName || 'Farmer Name'}</Text>
               
               {/* Crop Badge */}
               <View style={styles.cropBadge}>
                 <Ionicons name="leaf" size={moderateScale(11)} color="#A3C89E" />
-                <Text style={styles.cropBadgeText}>Maize farmer</Text>
+                <Text style={styles.cropBadgeText}>
+                  {userData?.profile?.preferredCrops && userData.profile.preferredCrops.length > 0
+                    ? `${userData.profile.preferredCrops[0].charAt(0).toUpperCase() + userData.profile.preferredCrops[0].slice(1).toLowerCase()} farmer`
+                    : 'Farmer'}
+                </Text>
               </View>
-
+ 
               {/* Location */}
               <View style={styles.locationRow}>
                 <Ionicons name="location-sharp" size={moderateScale(12)} color="#A3C89E" />
-                <Text style={styles.locationText}>Kumasi, Ashanti</Text>
+                <Text style={styles.locationText}>
+                  {userData?.profile?.location?.address || 'Kumasi, Ashanti'}
+                </Text>
               </View>
             </View>
 

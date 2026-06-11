@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 import { Colors } from '@/constants/theme';
@@ -13,6 +13,7 @@ export default function ListeningScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+  const { diseaseName, recommendations } = useLocalSearchParams<{ diseaseName?: string; recommendations?: string }>();
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
@@ -33,12 +34,11 @@ export default function ListeningScreen() {
 
         {/* Text content */}
         <Text style={[styles.textContent, { color: theme.text }]}>
-          Maize leaf blight disease{'\n'}
-          detected. Remove the{'\n'}
-          affected leaves. Apply{'\n'}
-          recommended fungicide.{'\n'}
-          Ensure good ventilation and{'\n'}
-          avoid overhead watering.
+          {diseaseName ? (
+            `${diseaseName} detected.\n\n${recommendations}`
+          ) : (
+            `Maize leaf blight disease\ndetected. Remove the\naffected leaves. Apply\nrecommended fungicide.\nEnsure good ventilation and\navoid overhead watering.`
+          )}
         </Text>
 
         {/* Progress bar */}

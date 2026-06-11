@@ -1,18 +1,107 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { CustomInput } from '@/components/CustomInput';
 import { CustomButton } from '@/components/CustomButton';
+import API from '@/services/api';
 
 export default function SignUpScreen() {
+  const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [locationText, setLocationText] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number }>({
+    latitude: 6.6961, // Default Kumasi latitude
+    longitude: -1.6152, // Default Kumasi longitude
+  });
+
+  // Fetch coordinates on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          let loc = await Location.getCurrentPositionAsync({});
+          setCoords({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
+          setLocationText('GPS Location Detected');
+        }
+      } catch (err) {
+        console.warn('Could not get GPS location:', err);
+      }
+    })();
+  }, []);
+
+  const handleSignUp = async () => {
+    if (!firstName || !lastName || !email || !password || !confirmPassword) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Prepare payload with default values for backend validation (actual onboarding happens next)
+      const payload = {
+        email,
+        password,
+        fullName: `${firstName} ${lastName}`.trim(),
+        phoneNumber: phoneNumber || '+233241234567', // Standard validation fallback
+        role: 'FARMER',
+        preferredCrops: ['MAIZE'],
+        location: {
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          address: locationText || 'Kumasi, Ashanti',
+        },
+      };
+
+      const response = await API.post('/api/auth/register', payload);
+      const { token } = response.data;
+      await AsyncStorage.setItem('userToken', token);
+      
+      if (response.data.user) {
+        const user = response.data.user;
+        user.isOnboarded = false;
+        await AsyncStorage.setItem('userData', JSON.stringify(user));
+      }
+
+      // Clear any previous cached onboarding settings
+      await AsyncStorage.removeItem('onboarding_role');
+      await AsyncStorage.removeItem('onboarding_preferredCrops');
+
+      Alert.alert('Success', 'Account created successfully!', [
+        { text: 'OK', onPress: () => router.replace('/(onboarding)/user-role') }
+      ]);
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      const errorMsg = error.response?.data?.message || 'An error occurred during sign up. Please try again.';
+      Alert.alert('Registration Failed', errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
@@ -39,11 +128,17 @@ export default function SignUpScreen() {
             placeholder="First Name"
             leftIcon="person-outline"
             containerStyle={styles.halfInput}
+            value={firstName}
+            onChangeText={setFirstName}
+            editable={!isLoading}
           />
           <CustomInput
             placeholder="Last Name"
             leftIcon="person-outline"
             containerStyle={styles.halfInput}
+            value={lastName}
+            onChangeText={setLastName}
+            editable={!isLoading}
           />
         </View>
 
@@ -52,11 +147,17 @@ export default function SignUpScreen() {
           leftIcon="mail-outline"
           keyboardType="email-address"
           autoCapitalize="none"
+          value={email}
+          onChangeText={setEmail}
+          editable={!isLoading}
         />
 
         <CustomInput
           placeholder="Phone Number (Optional)"
           keyboardType="phone-pad"
+          value={phoneNumber}
+          onChangeText={setPhoneNumber}
+          editable={!isLoading}
         />
 
         {/* Custom Country Code Field (Read Only) */}
@@ -74,19 +175,28 @@ export default function SignUpScreen() {
 
         <CustomInput
           placeholder="Location"
-          label="Detected: Ghana"
+          label={locationText ? `Detected: ${locationText}` : 'Detected: Ghana'}
+          value={locationText}
+          onChangeText={setLocationText}
+          editable={!isLoading}
         />
 
         <CustomInput
           placeholder="Password"
           leftIcon="lock-closed-outline"
           isPassword
+          value={password}
+          onChangeText={setPassword}
+          editable={!isLoading}
         />
 
         <CustomInput
           placeholder="Confirm Password"
           leftIcon="lock-closed-outline"
           isPassword
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          editable={!isLoading}
         />
 
         {/* Terms and Conditions */}
@@ -97,7 +207,7 @@ export default function SignUpScreen() {
         </View>
 
         {/* Submit Button */}
-        <CustomButton title="Create Account" onPress={() => console.log('Create Account pressed')} />
+        <CustomButton title="Create Account" loading={isLoading} disabled={isLoading} onPress={handleSignUp} />
 
         {/* Footer Link */}
         <View style={styles.footerContainer}>

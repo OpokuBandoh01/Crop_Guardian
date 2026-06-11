@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -11,10 +12,47 @@ import { CustomInput } from '@/components/CustomInput';
 import { CustomButton } from '@/components/CustomButton';
 import { SocialButton } from '@/components/SocialButton';
 import { Divider } from '@/components/Divider';
+import API from '@/services/api';
 
 export default function LoginScreen() {
+  const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSignIn = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await API.post('/api/auth/login', { email, password });
+      const { token } = response.data;
+      await AsyncStorage.setItem('userToken', token);
+      
+      if (response.data.user) {
+        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+        if (response.data.user.isOnboarded) {
+          router.replace('/(tabs)');
+        } else {
+          router.replace('/(onboarding)/user-role');
+        }
+      } else {
+        router.replace('/(tabs)');
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      const errorMsg = error.response?.data?.message || 'An error occurred during login. Please try again.';
+      Alert.alert('Login Failed', errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
@@ -41,23 +79,29 @@ export default function LoginScreen() {
           leftIcon="mail-outline"
           keyboardType="email-address"
           autoCapitalize="none"
+          value={email}
+          onChangeText={setEmail}
+          editable={!isLoading}
         />
 
         <CustomInput
           placeholder="Password"
           leftIcon="lock-closed-outline"
           isPassword
+          value={password}
+          onChangeText={setPassword}
+          editable={!isLoading}
         />
 
         {/* Forgot Password Link */}
         <Link href="/forgot-password" asChild>
-          <TouchableOpacity style={styles.forgotPasswordContainer}>
+          <TouchableOpacity style={styles.forgotPasswordContainer} disabled={isLoading}>
             <Text style={[styles.forgotPasswordText, { color: theme.icon }]}>Forgot password?</Text>
           </TouchableOpacity>
         </Link>
 
         {/* Submit Button */}
-        <CustomButton title="SIGN IN" onPress={() => console.log('Sign In pressed')} />
+        <CustomButton title="SIGN IN" loading={isLoading} disabled={isLoading} onPress={handleSignIn} />
 
         {/* Divider */}
         <Divider text="OR" />
@@ -79,7 +123,7 @@ export default function LoginScreen() {
 
         {/* Footer Link */}
         <View style={styles.footerContainer}>
-          <Text style={[styles.footerText, { color: theme.icon }]}>Don't have an account? </Text>
+          <Text style={[styles.footerText, { color: theme.icon }]}>{"Don't have an account? "}</Text>
           <Link href="/signup" asChild>
             <TouchableOpacity>
               <Text style={[styles.footerLink, { color: theme.primary }]}>Sign up!</Text>

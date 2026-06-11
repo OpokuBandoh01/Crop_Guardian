@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 import { Colors } from '@/constants/theme';
@@ -11,12 +11,56 @@ const { width } = Dimensions.get('window');
 
 export default function ResultScreen() {
   const router = useRouter();
+  const { data } = useLocalSearchParams<{ data?: string }>();
   
+  let scanResult: any = null;
+  if (data) {
+    try {
+      scanResult = JSON.parse(data);
+    } catch (e) {
+      console.error('Error parsing result data:', e);
+    }
+  }
+
   // Hardcoded colors for this specific dark theme screen
   const backgroundColor = '#083D04'; // A deep dark green
   const cardColor = 'rgba(255, 255, 255, 0.1)'; // Translucent overlay for cards
   const redColor = '#FF4D4D';
   const brightGreenColor = '#4ADE80';
+
+  const formatConfidence = (conf: any) => {
+    if (conf === undefined || conf === null) return '92%';
+    const val = Number(conf);
+    if (isNaN(val)) return String(conf);
+    if (val <= 1) return `${(val * 100).toFixed(0)}%`;
+    return `${val.toFixed(0)}%`;
+  };
+
+  const getActions = () => {
+    if (!scanResult) {
+      return [
+        'Remove affected leaves',
+        'Apply recommended fungicide',
+        'Ensure good ventilation',
+        'Avoid overhead watering'
+      ];
+    }
+    const actions: string[] = [];
+    if (scanResult.organicTreatments) actions.push(`Organic: ${scanResult.organicTreatments}`);
+    if (scanResult.chemicalOptions) actions.push(`Chemical: ${scanResult.chemicalOptions}`);
+    if (scanResult.prevention) actions.push(`Prevention: ${scanResult.prevention}`);
+    return actions.length > 0 ? actions : ['No recommendations provided.'];
+  };
+
+  const handleListen = () => {
+    router.push({
+      pathname: '/listening',
+      params: {
+        diseaseName: scanResult?.diseaseName || 'Septoria',
+        recommendations: getActions().join(' ')
+      }
+    });
+  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor }]}>
@@ -42,18 +86,28 @@ export default function ResultScreen() {
 
         {/* Disease Info Card */}
         <View style={[styles.card, { backgroundColor: cardColor }]}>
-          <Image 
-            source={require('@/assets/images/septorialeaf.png')} 
-            style={styles.diseaseImage}
-            contentFit="cover"
-          />
+          {scanResult?.imageUrl ? (
+            <Image 
+              source={{ uri: scanResult.imageUrl }} 
+              style={styles.diseaseImage}
+              contentFit="cover"
+            />
+          ) : (
+            <Image 
+              source={require('@/assets/images/septorialeaf.png')} 
+              style={styles.diseaseImage}
+              contentFit="cover"
+            />
+          )}
           <View style={styles.diseaseInfo}>
             <Text style={[styles.alertText, { color: redColor }]}>Disease Detected</Text>
-            <Text style={styles.diseaseName}>Septoria</Text>
-            <Text style={styles.diseaseSubtitle}>A leaf spot fungus</Text>
+            <Text style={styles.diseaseName}>{scanResult?.diseaseName || 'Septoria'}</Text>
+            <Text style={styles.diseaseSubtitle}>{scanResult?.detectedCrop ? `On ${scanResult.detectedCrop}` : 'A leaf spot fungus'}</Text>
             <View style={styles.confidenceRow}>
               <Text style={styles.confidenceLabel}>Confidence: </Text>
-              <Text style={[styles.confidenceValue, { color: brightGreenColor }]}>92%</Text>
+              <Text style={[styles.confidenceValue, { color: brightGreenColor }]}>
+                {formatConfidence(scanResult?.confidence)}
+              </Text>
             </View>
           </View>
         </View>
@@ -62,7 +116,7 @@ export default function ResultScreen() {
         <View style={[styles.card, { backgroundColor: cardColor, flexDirection: 'column' }]}>
           <Text style={styles.cardTitle}>Description</Text>
           <Text style={styles.cardText}>
-            Septoria, commonly known as a leaf spot is a species of fungus that infects vegetables, trees and ornamental plants. In some cases damage is insignificant, in others there's no hope.
+            {scanResult?.symptoms || scanResult?.causes || 'Septoria, commonly known as a leaf spot is a species of fungus that infects vegetables, trees and ornamental plants. In some cases damage is insignificant, in others there\'s no hope.'}
           </Text>
         </View>
 
@@ -70,25 +124,12 @@ export default function ResultScreen() {
         <View style={[styles.card, { backgroundColor: cardColor, flexDirection: 'column', marginBottom: verticalScale(30) }]}>
           <Text style={styles.cardTitle}>Recommended Actions</Text>
           
-          <View style={styles.actionItem}>
-            <Ionicons name="checkmark" size={moderateScale(20)} color="#FFFFFF" />
-            <Text style={styles.actionText}>Remove affected leaves</Text>
-          </View>
-          
-          <View style={styles.actionItem}>
-            <Ionicons name="checkmark" size={moderateScale(20)} color="#FFFFFF" />
-            <Text style={styles.actionText}>Apply recommended fungicide</Text>
-          </View>
-          
-          <View style={styles.actionItem}>
-            <Ionicons name="checkmark" size={moderateScale(20)} color="#FFFFFF" />
-            <Text style={styles.actionText}>Ensure good ventilation</Text>
-          </View>
-          
-          <View style={styles.actionItem}>
-            <Ionicons name="checkmark" size={moderateScale(20)} color="#FFFFFF" />
-            <Text style={styles.actionText}>Avoid overhead watering</Text>
-          </View>
+          {getActions().map((action, index) => (
+            <View key={index} style={styles.actionItem}>
+              <Ionicons name="checkmark" size={moderateScale(20)} color="#FFFFFF" />
+              <Text style={styles.actionText}>{action}</Text>
+            </View>
+          ))}
         </View>
 
         {/* Action Buttons */}
@@ -99,7 +140,7 @@ export default function ResultScreen() {
 
           <TouchableOpacity 
             style={styles.secondaryButton}
-            onPress={() => router.push('/listening')}
+            onPress={handleListen}
           >
             <Ionicons name="volume-medium" size={moderateScale(20)} color="#FFFFFF" style={styles.buttonIcon} />
             <Text style={styles.secondaryButtonText}>Listen(Twi)</Text>

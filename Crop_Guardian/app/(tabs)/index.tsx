@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,17 +11,114 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import API from '@/services/api';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+
+  const [userData, setUserData] = useState<any>(null);
+  const [weatherData, setWeatherData] = useState<any>(null);
+  const [myCrops, setMyCrops] = useState<any[]>([]);
+  const [cropStages, setCropStages] = useState<Record<string, string>>({});
+
+  const fetchUser = async () => {
+    try {
+      const res = await API.get('/api/auth/me');
+      if (res.data?.success && res.data.user) {
+        setUserData(res.data.user);
+        await AsyncStorage.setItem('userData', JSON.stringify(res.data.user));
+      }
+    } catch (err) {
+      console.warn('Error fetching me from API, using cache:', err);
+      const cached = await AsyncStorage.getItem('userData');
+      if (cached) {
+        try {
+          setUserData(JSON.parse(cached));
+        } catch {}
+      }
+    }
+  };
+
+  const fetchWeather = async () => {
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      let params = {};
+      if (status === 'granted') {
+        const loc = await Location.getCurrentPositionAsync({});
+        params = { lat: loc.coords.latitude, lon: loc.coords.longitude };
+      }
+      const res = await API.get('/api/weather/forecast', { params });
+      if (res.data?.success && res.data.data) {
+        setWeatherData(res.data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching weather:', err);
+    }
+  };
+
+  const fetchMyCrops = async () => {
+    try {
+      const res = await API.get('/api/crops/my-crops');
+      if (res.data?.success && res.data.crops && res.data.crops.length > 0) {
+        setMyCrops(res.data.crops);
+        return;
+      }
+    } catch (err) {
+      console.error('Error fetching my crops:', err);
+    }
+
+    try {
+      const onboardingCropsRaw = await AsyncStorage.getItem('onboarding_preferredCrops');
+      if (onboardingCropsRaw) {
+        const parsed = JSON.parse(onboardingCropsRaw) as string[];
+        const mappedCrops = parsed.map((cropName) => ({
+          cropType: cropName,
+        }));
+        setMyCrops(mappedCrops);
+      }
+
+      const stagesRaw = await AsyncStorage.getItem('onboarding_cropStages');
+      if (stagesRaw) {
+        setCropStages(JSON.parse(stagesRaw));
+      }
+    } catch (e) {
+      console.error('Error loading fallback crops/stages:', e);
+    }
+  };
+
+  useEffect(() => {
+    const initHomeScreen = async () => {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        router.replace('/login');
+        return;
+      }
+
+      fetchUser();
+      fetchWeather();
+      fetchMyCrops();
+    };
+
+    initHomeScreen();
+
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchUser();
+      fetchMyCrops();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
@@ -34,7 +131,9 @@ export default function HomeScreen() {
         <View style={styles.headerContainer}>
           <View style={styles.headerLeft}>
             <View style={styles.greetingRow}>
-              <Text style={[styles.greetingText, { color: theme.text }]}>Good morning, Kofi!</Text>
+              <Text style={[styles.greetingText, { color: theme.text }]}>
+                Good morning, {userData?.profile?.fullName?.split(' ')[0] || 'Farmer'}!
+              </Text>
               <Image
                 source={require('@/assets/icons/seedlingicon.png')}
                 style={styles.seedlingIcon}
@@ -42,7 +141,7 @@ export default function HomeScreen() {
               />
             </View>
             <Text style={[styles.subtitleText, { color: theme.icon }]}>
-              Let's make today a productive{'\n'} day on your farm.
+              {"Let's make today a productive"}{'\n'}{" day on your farm."}
             </Text>
           </View>
 
@@ -63,10 +162,14 @@ export default function HomeScreen() {
                 color={theme.primary}
                 style={styles.weatherStateIcon}
               />
-              <Text style={[styles.tempText, { color: theme.text }]}>28°C</Text>
+              <Text style={[styles.tempText, { color: theme.text }]}>
+                {weatherData?.current?.temp ? `${weatherData.current.temp.toFixed(0)}°C` : '28°C'}
+              </Text>
             </View>
 
-            <Text style={[styles.weatherDesc, { color: theme.text }]}>Light rain expected at 4PM</Text>
+            <Text style={[styles.weatherDesc, { color: theme.text }]}>
+              {weatherData?.overallSummary || 'Light rain expected at 4PM'}
+            </Text>
 
             <TouchableOpacity
               style={[styles.forecastButton, { backgroundColor: colorScheme === 'light' ? '#C8E6C9' : '#2E3D30' }]}
@@ -87,7 +190,9 @@ export default function HomeScreen() {
               <Ionicons name="water-outline" size={moderateScale(18)} color={theme.primary} />
               <View style={styles.weatherStatTextWrapper}>
                 <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>Humidity</Text>
-                <Text style={[styles.weatherStatValue, { color: theme.text }]}>70%</Text>
+                <Text style={[styles.weatherStatValue, { color: theme.text }]}>
+                  {weatherData?.current?.humidity ? `${weatherData.current.humidity}%` : '70%'}
+                </Text>
               </View>
             </View>
 
@@ -96,7 +201,9 @@ export default function HomeScreen() {
               <Ionicons name="leaf-outline" size={moderateScale(18)} color={theme.primary} />
               <View style={styles.weatherStatTextWrapper}>
                 <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>Wind</Text>
-                <Text style={[styles.weatherStatValue, { color: theme.text }]}>Moderate</Text>
+                <Text style={[styles.weatherStatValue, { color: theme.text }]}>
+                  {weatherData?.current?.windSpeed ? `${weatherData.current.windSpeed} km/h` : 'Moderate'}
+                </Text>
               </View>
             </View>
 
@@ -105,7 +212,9 @@ export default function HomeScreen() {
               <Ionicons name="thermometer-outline" size={moderateScale(18)} color={theme.primary} />
               <View style={styles.weatherStatTextWrapper}>
                 <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>Feels like</Text>
-                <Text style={[styles.weatherStatValue, { color: theme.text }]}>30°C</Text>
+                <Text style={[styles.weatherStatValue, { color: theme.text }]}>
+                  {weatherData?.current?.feelsLike ? `${weatherData.current.feelsLike.toFixed(0)}°C` : '30°C'}
+                </Text>
               </View>
             </View>
           </View>
@@ -131,7 +240,7 @@ export default function HomeScreen() {
             <View style={styles.scanActionContainer}>
               <TouchableOpacity
                 style={styles.scanActionButtonSolid}
-                onPress={() => router.push('/scan')}
+                onPress={() => router.push('/scan?action=camera')}
                 activeOpacity={0.9}
               >
                 <Ionicons name="camera" size={moderateScale(16)} color="#094A04" style={styles.scanActionIcon} />
@@ -140,7 +249,7 @@ export default function HomeScreen() {
 
               <TouchableOpacity
                 style={styles.scanActionButtonOutline}
-                onPress={() => console.log('Upload image from gallery')}
+                onPress={() => router.push('/scan?action=gallery')}
                 activeOpacity={0.8}
               >
                 <Ionicons name="image-outline" size={moderateScale(16)} color="#FFFFFF" style={styles.scanActionIcon} />
@@ -176,33 +285,81 @@ export default function HomeScreen() {
 
         {/* Horizontal cards layout for crop statuses */}
         <View style={styles.overviewCardsRow}>
-          {/* Maize Card */}
-          <View style={[styles.overviewCard, { backgroundColor: colorScheme === 'light' ? '#EBF7E9' : '#1E2C20' }]}>
-            <View style={styles.overviewCardHeader}>
-              <Image
-                source={require('@/assets/icons/maizeicon.png')}
-                style={styles.cropIcon}
-                resizeMode="contain"
-              />
-            </View>
-            <Text style={[styles.cropNameText, { color: theme.text }]}>Maize</Text>
-            <Text style={styles.cropStatusHealthy}>Healthy</Text>
-            <Text style={[styles.cropConditionSub, { color: theme.icon }]}>Good condition</Text>
-          </View>
+          {myCrops.length > 0 ? (
+            myCrops.slice(0, 2).map((cropItem, idx) => {
+              const cropName = cropItem.cropType.toLowerCase();
+              const formattedName = cropName.charAt(0).toUpperCase() + cropName.slice(1);
+              const isWarning = idx === 1; // variance for rich presentation
 
-          {/* Cassava Card */}
-          <View style={[styles.overviewCard, { backgroundColor: colorScheme === 'light' ? '#FFFCE2' : '#2D2B1C' }]}>
-            <View style={styles.overviewCardHeader}>
-              <Image
-                source={require('@/assets/icons/cassavaicon.png')}
-                style={styles.cropIcon}
-                resizeMode="contain"
-              />
-            </View>
-            <Text style={[styles.cropNameText, { color: theme.text }]}>Cassava</Text>
-            <Text style={styles.cropStatusWarning}>Needs attention</Text>
-            <Text style={[styles.cropConditionSub, { color: theme.icon }]}>Check now</Text>
-          </View>
+              let cropIcon = require('@/assets/icons/maizeicon.png');
+              if (cropName === 'cassava') cropIcon = require('@/assets/icons/cassavaicon.png');
+              else if (cropName === 'tomato') cropIcon = require('@/assets/icons/seedlingicon.png');
+              else if (cropName === 'pepper') cropIcon = require('@/assets/icons/twoleaficon.png');
+              else if (cropName === 'rice') cropIcon = require('@/assets/icons/maizeicon.png');
+              else if (cropName === 'plantain') cropIcon = require('@/assets/icons/mycropsicon.png');
+              else if (cropName === 'yam') cropIcon = require('@/assets/icons/cassavaicon.png');
+              else if (cropName === 'cocoa') cropIcon = require('@/assets/icons/tipsicon.png');
+              else if (cropName === 'groundnut') cropIcon = require('@/assets/icons/twoleaficon.png');
+              else if (cropName === 'onion') cropIcon = require('@/assets/icons/seedlingicon.png');
+
+              const growthStage = cropStages[cropItem.cropType] || 'Growing';
+
+              return (
+                <View 
+                  key={idx}
+                  style={[
+                    styles.overviewCard, 
+                    { backgroundColor: isWarning ? (colorScheme === 'light' ? '#FFFCE2' : '#2D2B1C') : (colorScheme === 'light' ? '#EBF7E9' : '#1E2C20') }
+                  ]}
+                >
+                  <View style={styles.overviewCardHeader}>
+                    <Image
+                      source={cropIcon}
+                      style={styles.cropIcon}
+                      resizeMode="contain"
+                    />
+                  </View>
+                  <Text style={[styles.cropNameText, { color: theme.text }]}>{formattedName}</Text>
+                  <Text style={isWarning ? styles.cropStatusWarning : styles.cropStatusHealthy}>
+                    {isWarning ? 'Needs attention' : 'Healthy'}
+                  </Text>
+                  <Text style={[styles.cropConditionSub, { color: theme.icon }]}>
+                    {growthStage} Stage
+                  </Text>
+                </View>
+              );
+            })
+          ) : (
+            <>
+              {/* Maize Card */}
+              <View style={[styles.overviewCard, { backgroundColor: colorScheme === 'light' ? '#EBF7E9' : '#1E2C20' }]}>
+                <View style={styles.overviewCardHeader}>
+                  <Image
+                    source={require('@/assets/icons/maizeicon.png')}
+                    style={styles.cropIcon}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={[styles.cropNameText, { color: theme.text }]}>Maize</Text>
+                <Text style={styles.cropStatusHealthy}>Healthy</Text>
+                <Text style={[styles.cropConditionSub, { color: theme.icon }]}>Good condition</Text>
+              </View>
+
+              {/* Cassava Card */}
+              <View style={[styles.overviewCard, { backgroundColor: colorScheme === 'light' ? '#FFFCE2' : '#2D2B1C' }]}>
+                <View style={styles.overviewCardHeader}>
+                  <Image
+                    source={require('@/assets/icons/cassavaicon.png')}
+                    style={styles.cropIcon}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={[styles.cropNameText, { color: theme.text }]}>Cassava</Text>
+                <Text style={styles.cropStatusWarning}>Needs attention</Text>
+                <Text style={[styles.cropConditionSub, { color: theme.icon }]}>Check now</Text>
+              </View>
+            </>
+          )}
 
           {/* Alerts Card */}
           <View style={[styles.overviewCard, { backgroundColor: '#FEE5F5' }]}>

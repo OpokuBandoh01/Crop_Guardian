@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 import { useRouter } from 'expo-router';
+import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import API from '@/services/api';
 
 const { width } = Dimensions.get('window');
 
@@ -23,6 +26,76 @@ export default function WeatherScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+
+  const [weatherData, setWeatherData] = useState<any>(null);
+  const [address, setAddress] = useState<string>('Kumasi, Ghana');
+
+  useEffect(() => {
+    const initWeatherScreen = async () => {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        router.replace('/login');
+        return;
+      }
+
+      const fetchWeather = async () => {
+        try {
+          let { status } = await Location.requestForegroundPermissionsAsync();
+          let params = {};
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({});
+            params = { lat: loc.coords.latitude, lon: loc.coords.longitude };
+            
+            // Reverse geocode to get city name
+            const geocode = await Location.reverseGeocodeAsync({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude
+            });
+            if (geocode && geocode.length > 0) {
+              const city = geocode[0].city || geocode[0].region || 'Kumasi';
+              const country = geocode[0].country || 'Ghana';
+              setAddress(`${city}, ${country}`);
+            }
+          }
+          
+          const res = await API.get('/api/weather/forecast', { params });
+          if (res.data?.success && res.data.data) {
+            setWeatherData(res.data.data);
+          }
+        } catch (err) {
+          console.error('Error fetching weather in detailed screen:', err);
+        }
+      };
+
+      fetchWeather();
+    };
+
+    initWeatherScreen();
+  }, []);
+
+  const getRiskInsights = () => {
+    if (weatherData && Array.isArray(weatherData.riskInsights) && weatherData.riskInsights.length > 0) {
+      return weatherData.riskInsights.join('. ');
+    }
+    if (weatherData && typeof weatherData.riskInsights === 'string') {
+      return weatherData.riskInsights;
+    }
+    return 'Rain is expected tomorrow. Good for your crop. Ensure proper drainage to avoid water logging';
+  };
+
+  const getDailyForecast = () => {
+    if (weatherData && Array.isArray(weatherData.daily)) {
+      return weatherData.daily;
+    }
+    return [
+      { day: 'Tomorrow', date: '25 May', condition: 'Light Rain', chance: 70, tempMin: 24, tempMax: 29 },
+      { day: 'Monday', date: '26 May', condition: 'Cloudy', chance: 30, tempMin: 24, tempMax: 30 },
+      { day: 'Tuesday', date: '27 May', condition: 'Partly Cloudy', chance: 20, tempMin: 24, tempMax: 31 },
+      { day: 'Wednesday', date: '28 May', condition: 'Sunny', chance: 10, tempMin: 24, tempMax: 32 },
+      { day: 'Thursday', date: '29 May', condition: 'Partly Cloudy', chance: 20, tempMin: 24, tempMax: 31 },
+      { day: 'Friday', date: '30 May', condition: 'Light Rain', chance: 60, tempMin: 24, tempMax: 29 }
+    ];
+  };
 
   // Dummy navigation handlers for floating menu
   const handleNavPress = (tabName: string) => {
@@ -54,7 +127,7 @@ export default function WeatherScreen() {
           <Text style={styles.headerTitle}>Weather</Text>
           <View style={styles.locationRow}>
             <Ionicons name="location-sharp" size={moderateScale(12)} color="#094A04" style={styles.locationIcon} />
-            <Text style={styles.locationText}>Kumasi, Ghana</Text>
+            <Text style={styles.locationText}>{address}</Text>
           </View>
         </View>
 
@@ -79,11 +152,15 @@ export default function WeatherScreen() {
           imageStyle={styles.weatherCardImage}
         >
           {/* Top text */}
-          <Text style={styles.todayDateText}>Today, 24 May</Text>
+          <Text style={styles.todayDateText}>
+            {weatherData?.current?.date || 'Today, 24 May'}
+          </Text>
           
           {/* Main layout */}
           <View style={styles.weatherCardMiddle}>
-            <Text style={styles.todayTempText}>28°C</Text>
+            <Text style={styles.todayTempText}>
+              {weatherData?.current?.temp ? `${weatherData.current.temp.toFixed(0)}°C` : '28°C'}
+            </Text>
             
             {/* Custom High-Fidelity Weather Icon Overlay */}
             <View style={styles.weatherIconOverlay}>
@@ -101,7 +178,9 @@ export default function WeatherScreen() {
           </View>
 
           {/* Bottom text */}
-          <Text style={styles.todayConditionText}>Partly Cloudy</Text>
+          <Text style={styles.todayConditionText}>
+            {weatherData?.current?.condition || 'Partly Cloudy'}
+          </Text>
         </ImageBackground>
 
         {/* ================= WEATHER STATS GRID ================= */}
@@ -113,7 +192,9 @@ export default function WeatherScreen() {
             </View>
             <View style={styles.statTextGroup}>
               <Text style={styles.statLabel}>Humidity</Text>
-              <Text style={styles.statValue}>70%</Text>
+              <Text style={styles.statValue}>
+                {weatherData?.current?.humidity ? `${weatherData.current.humidity}%` : '70%'}
+              </Text>
               <Text style={styles.statDesc}>Moderate</Text>
             </View>
           </View>
@@ -127,7 +208,9 @@ export default function WeatherScreen() {
             </View>
             <View style={styles.statTextGroup}>
               <Text style={styles.statLabel}>Rain Chance</Text>
-              <Text style={styles.statValue}>40%</Text>
+              <Text style={styles.statValue}>
+                {weatherData?.current?.rainChance !== undefined ? `${weatherData.current.rainChance}%` : '40%'}
+              </Text>
               <Text style={styles.statDesc}>Possible showers</Text>
             </View>
           </View>
@@ -141,7 +224,9 @@ export default function WeatherScreen() {
             </View>
             <View style={styles.statTextGroup}>
               <Text style={styles.statLabel}>Wind</Text>
-              <Text style={styles.statValue}>12km/h</Text>
+              <Text style={styles.statValue}>
+                {weatherData?.current?.windSpeed ? `${weatherData.current.windSpeed} km/h` : '12km/h'}
+              </Text>
               <Text style={styles.statDesc}>Light breeze</Text>
             </View>
           </View>
@@ -156,7 +241,7 @@ export default function WeatherScreen() {
           <View style={styles.adviceLeft}>
             <Text style={styles.adviceTitle}>Weather Advice for Maize</Text>
             <Text style={styles.adviceBody}>
-              Rain is expected tomorrow. Good for your crop. Ensure proper drainage to avoid water logging
+              {getRiskInsights()}
             </Text>
           </View>
           
@@ -228,87 +313,40 @@ export default function WeatherScreen() {
         </Text>
 
         <View style={[styles.forecastContainer, { backgroundColor: colorScheme === 'light' ? '#FFFFED' : '#1F2937' }]}>
-          {/* Row 1: Tomorrow */}
-          <View style={styles.forecastRow}>
-            <View style={styles.forecastDayCol}>
-              <Text style={styles.forecastDayText}>Tomorrow</Text>
-              <Text style={styles.forecastDateText}>25 May</Text>
-            </View>
-            <Ionicons name="rainy-outline" size={moderateScale(20)} color="#094A04" style={styles.forecastRowIcon} />
-            <Text style={styles.forecastDescText}>Light Rain</Text>
-            <Text style={styles.forecastChanceText}>70%</Text>
-            <Text style={styles.forecastTempRangeText}>24°/29°</Text>
-          </View>
+          {getDailyForecast().map((forecast: any, index: number) => {
+            let iconName = forecast.icon || 'partly-sunny-outline';
+            let iconColor = '#FFB300';
+            if (forecast.condition?.toLowerCase().includes('rain')) {
+              iconName = 'rainy-outline';
+              iconColor = '#094A04';
+            } else if (forecast.condition?.toLowerCase().includes('cloud')) {
+              iconName = 'cloud-outline';
+              iconColor = '#A3C89E';
+            } else if (forecast.condition?.toLowerCase().includes('sun') || forecast.condition?.toLowerCase().includes('clear')) {
+              iconName = 'sunny-outline';
+              iconColor = '#FFB300';
+            }
 
-          <View style={styles.rowDivider} />
-
-          {/* Row 2: Monday */}
-          <View style={styles.forecastRow}>
-            <View style={styles.forecastDayCol}>
-              <Text style={styles.forecastDayText}>Monday</Text>
-              <Text style={styles.forecastDateText}>26 May</Text>
-            </View>
-            <Ionicons name="cloud-outline" size={moderateScale(20)} color="#A3C89E" style={styles.forecastRowIcon} />
-            <Text style={styles.forecastDescText}>Cloudy</Text>
-            <Text style={styles.forecastChanceText}>30%</Text>
-            <Text style={styles.forecastTempRangeText}>24°/30°</Text>
-          </View>
-
-          <View style={styles.rowDivider} />
-
-          {/* Row 3: Tuesday */}
-          <View style={styles.forecastRow}>
-            <View style={styles.forecastDayCol}>
-              <Text style={styles.forecastDayText}>Tuesday</Text>
-              <Text style={styles.forecastDateText}>27 May</Text>
-            </View>
-            <Ionicons name="partly-sunny-outline" size={moderateScale(20)} color="#FFB300" style={styles.forecastRowIcon} />
-            <Text style={styles.forecastDescText}>Partly Cloudy</Text>
-            <Text style={styles.forecastChanceText}>20%</Text>
-            <Text style={styles.forecastTempRangeText}>24°/31°</Text>
-          </View>
-
-          <View style={styles.rowDivider} />
-
-          {/* Row 4: Wednesday */}
-          <View style={styles.forecastRow}>
-            <View style={styles.forecastDayCol}>
-              <Text style={styles.forecastDayText}>Wednesday</Text>
-              <Text style={styles.forecastDateText}>28 May</Text>
-            </View>
-            <Ionicons name="sunny-outline" size={moderateScale(20)} color="#FFB300" style={styles.forecastRowIcon} />
-            <Text style={styles.forecastDescText}>Sunny</Text>
-            <Text style={styles.forecastChanceText}>10%</Text>
-            <Text style={styles.forecastTempRangeText}>24°/32°</Text>
-          </View>
-
-          <View style={styles.rowDivider} />
-
-          {/* Row 5: Thursday */}
-          <View style={styles.forecastRow}>
-            <View style={styles.forecastDayCol}>
-              <Text style={styles.forecastDayText}>Thursday</Text>
-              <Text style={styles.forecastDateText}>29 May</Text>
-            </View>
-            <Ionicons name="partly-sunny-outline" size={moderateScale(20)} color="#FFB300" style={styles.forecastRowIcon} />
-            <Text style={styles.forecastDescText}>Partly Cloudy</Text>
-            <Text style={styles.forecastChanceText}>20%</Text>
-            <Text style={styles.forecastTempRangeText}>24°/31°</Text>
-          </View>
-
-          <View style={styles.rowDivider} />
-
-          {/* Row 6: Friday */}
-          <View style={styles.forecastRow}>
-            <View style={styles.forecastDayCol}>
-              <Text style={styles.forecastDayText}>Friday</Text>
-              <Text style={styles.forecastDateText}>30 May</Text>
-            </View>
-            <Ionicons name="rainy-outline" size={moderateScale(20)} color="#094A04" style={styles.forecastRowIcon} />
-            <Text style={styles.forecastDescText}>Light Rain</Text>
-            <Text style={styles.forecastChanceText}>60%</Text>
-            <Text style={styles.forecastTempRangeText}>24°/29°</Text>
-          </View>
+            return (
+              <View key={index}>
+                <View style={styles.forecastRow}>
+                  <View style={styles.forecastDayCol}>
+                    <Text style={styles.forecastDayText}>{forecast.day || forecast.dayName}</Text>
+                    <Text style={styles.forecastDateText}>{forecast.date}</Text>
+                  </View>
+                  <Ionicons name={iconName as any} size={moderateScale(20)} color={iconColor} style={styles.forecastRowIcon} />
+                  <Text style={styles.forecastDescText}>{forecast.condition}</Text>
+                  <Text style={styles.forecastChanceText}>
+                    {forecast.chance !== undefined ? (typeof forecast.chance === 'number' && forecast.chance <= 1 ? `${(forecast.chance * 100).toFixed(0)}%` : `${forecast.chance}%`) : '20%'}
+                  </Text>
+                  <Text style={styles.forecastTempRangeText}>
+                    {forecast.tempRange || `${forecast.tempMin?.toFixed(0) || 24}°/${forecast.tempMax?.toFixed(0) || 30}°`}
+                  </Text>
+                </View>
+                {index < getDailyForecast().length - 1 && <View style={styles.rowDivider} />}
+              </View>
+            );
+          })}
         </View>
 
       </ScrollView>

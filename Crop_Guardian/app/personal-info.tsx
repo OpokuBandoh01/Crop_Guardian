@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import API from '@/services/api';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -21,28 +23,100 @@ import { CustomButton } from '@/components/CustomButton';
 
 export default function PersonalInfoScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
 
   // Form states
-  const [fullName, setFullName] = useState('Kofi Mensah');
-  const [email, setEmail] = useState('kofi.mensah@gmail.com');
-  const [phone, setPhone] = useState('+233 24 123 4567');
-  const [location, setLocation] = useState('Kumasi, Ashanti');
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [location, setLocation] = useState('');
   
   // UI states
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  const handleSave = () => {
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const cached = await AsyncStorage.getItem('userData');
+        if (cached) {
+          const user = JSON.parse(cached);
+          if (user.profile?.fullName) setFullName(user.profile.fullName);
+          if (user.email) setEmail(user.email);
+          if (user.phoneNumber) setPhone(user.phoneNumber);
+          if (user.profile?.location?.address) setLocation(user.profile.location.address);
+        }
+
+        const res = await API.get('/api/auth/me');
+        if (res.data?.success && res.data.user) {
+          const user = res.data.user;
+          await AsyncStorage.setItem('userData', JSON.stringify(user));
+          if (user.profile?.fullName) setFullName(user.profile.fullName);
+          if (user.email) setEmail(user.email);
+          if (user.phoneNumber) setPhone(user.phoneNumber);
+          if (user.profile?.location?.address) setLocation(user.profile.location.address);
+        }
+      } catch (e) {
+        console.warn('Error loading user data in personal-info:', e);
+      }
+    };
+
+    loadUserData();
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadUserData();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  const handleSave = async () => {
     setIsSaving(true);
-    setTimeout(() => {
+    try {
+      const cached = await AsyncStorage.getItem('userData');
+      let parsedUserData: any = {};
+      if (cached) {
+        parsedUserData = JSON.parse(cached);
+      }
+      
+      // Update local userData object structure
+      if (!parsedUserData.profile) {
+        parsedUserData.profile = {};
+      }
+      parsedUserData.profile.fullName = fullName;
+      parsedUserData.email = email;
+      parsedUserData.phoneNumber = phone;
+      if (!parsedUserData.profile.location) {
+        parsedUserData.profile.location = {};
+      }
+      parsedUserData.profile.location.address = location;
+
+      await AsyncStorage.setItem('userData', JSON.stringify(parsedUserData));
+
+      // Attempt to save to backend (fallback gracefully if update endpoints not supported)
+      try {
+        await API.put('/api/auth/me', {
+          fullName,
+          email,
+          phoneNumber: phone,
+          location: {
+            address: location
+          }
+        });
+      } catch {
+        // Safe to ignore since backend doesn't support profile updates directly yet
+      }
+
       setIsSaving(false);
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
-      }, 3000);
-    }, 1200);
+        router.back();
+      }, 1500);
+    } catch (e) {
+      console.error('Error saving personal info:', e);
+      setIsSaving(false);
+    }
   };
 
   // Profile completion calculation (mock)

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -12,11 +13,15 @@ import { CustomButton } from '@/components/CustomButton';
 
 const CROPS = [
   { id: 'maize', name: 'Maize', image: require('@/assets/images/maize.png') },
-  { id: 'tomato', name: 'Tomato', image: require('@/assets/images/tomato.png') },
   { id: 'cassava', name: 'Cassava', image: require('@/assets/images/cassava.png') },
-  { id: 'plantain', name: 'Plantain', image: require('@/assets/images/plantain.png') },
+  { id: 'tomato', name: 'Tomato', image: require('@/assets/images/tomato.png') },
   { id: 'pepper', name: 'Pepper', image: require('@/assets/images/pepper.png') },
+  { id: 'rice', name: 'Rice', image: require('@/assets/images/maize.png') }, // Improvised
+  { id: 'plantain', name: 'Plantain', image: require('@/assets/images/plantain.png') },
+  { id: 'yam', name: 'Yam', image: require('@/assets/images/cassava.png') }, // Improvised
   { id: 'cocoa', name: 'Cocoa', image: require('@/assets/images/cocoa.png') },
+  { id: 'groundnut', name: 'Groundnut', image: require('@/assets/images/pepper.png') }, // Improvised
+  { id: 'onion', name: 'Onion', image: require('@/assets/images/tomato.png') }, // Improvised
 ];
 
 export default function CropSelectionScreen() {
@@ -32,9 +37,13 @@ export default function CropSelectionScreen() {
     );
   };
 
-  const handleNext = () => {
-    // Navigate to next screen (placeholder logic)
-    console.log('Selected Crops:', selectedCrops);
+  const handleNext = async () => {
+    try {
+      const uppercaseCrops = selectedCrops.map(crop => crop.toUpperCase());
+      await AsyncStorage.setItem('onboarding_preferredCrops', JSON.stringify(uppercaseCrops));
+    } catch (err) {
+      console.error('Error saving onboarding crops:', err);
+    }
     router.push('/crop-details');
   };
 
@@ -69,7 +78,7 @@ export default function CropSelectionScreen() {
 
         {/* Crop Grid */}
         <View style={styles.gridContainer}>
-          {CROPS.map((crop) => {
+          {CROPS.filter(crop => crop.name.toLowerCase().includes(searchQuery.toLowerCase())).map((crop) => {
             const isSelected = selectedCrops.includes(crop.id);
             return (
               <TouchableOpacity

@@ -22,6 +22,18 @@ export default function RootLayout() {
         <Stack.Screen name="result" options={{ headerShown: false }} />
         <Stack.Screen name="weather" options={{ headerShown: false }} />
         <Stack.Screen name="listening" options={{ headerShown: false }} />
+        <Stack.Screen name="personal-info" options={{ headerShown: false }} />
+        <Stack.Screen name="farm-info" options={{ headerShown: false }} />
+        <Stack.Screen name="change-password" options={{ headerShown: false }} />
+        <Stack.Screen name="offline-database" options={{ headerShown: false }} />
+        <Stack.Screen name="appearance" options={{ headerShown: false }} />
+        <Stack.Screen name="language" options={{ headerShown: false }} />
+        <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
+        <Stack.Screen name="unit-settings" options={{ headerShown: false }} />
+        <Stack.Screen name="help-support" options={{ headerShown: false }} />
+        <Stack.Screen name="about-us" options={{ headerShown: false }} />
+        <Stack.Screen name="rate-us" options={{ headerShown: false }} />
+        <Stack.Screen name="logout" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="auto" />

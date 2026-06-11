@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,24 +6,58 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { BlurView } from 'expo-blur';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   const handlePress = (screen: string) => {
-    console.log(`Navigating to ${screen}`);
+    if (screen === 'Log Out') {
+      router.push('/logout');
+    } else if (screen === 'Personal Information' || screen === 'Edit Profile') {
+      router.push('/personal-info');
+    } else if (screen === 'Farm Information') {
+      router.push('/farm-info');
+    } else if (screen === 'Change Password') {
+      router.push('/change-password');
+    } else if (screen === 'Offline Database') {
+      router.push('/offline-database');
+    } else if (screen === 'Appearance') {
+      router.push('/appearance');
+    } else if (screen === 'Language') {
+      router.push('/language');
+    } else if (screen === 'Notification Settings') {
+      router.push('/notification-settings');
+    } else if (screen === 'Unit Settings') {
+      router.push('/unit-settings');
+    } else if (screen === 'Help & Support') {
+      router.push('/help-support');
+    } else if (screen === 'About Us') {
+      router.push('/about-us');
+    } else if (screen === 'Rate Us') {
+      router.push('/rate-us');
+    } else {
+      console.log(`Navigating to ${screen}`);
+    }
   };
 
   const pillText = colorScheme === 'light' ? '#094A04' : '#4ADE80';
   const pillBg = colorScheme === 'light' ? '#EBF7E9' : '#2E3D30';
+  const backdropBgColor = colorScheme === 'light' 
+    ? 'rgba(255, 255, 255, 0.65)' 
+    : 'rgba(0, 0, 0, 0.75)';
 
   const renderRow = (
     title: string,
@@ -337,6 +371,73 @@ export default function ProfileScreen() {
         </View>
 
       </ScrollView>
+
+      {/* ================= LOGOUT CONFIRMATION MODAL ================= */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={logoutModalVisible}
+        onRequestClose={() => setLogoutModalVisible(false)}
+      >
+        <View style={[styles.modalBackdrop, { backgroundColor: backdropBgColor }]}>
+          {/* Background Blur View sibling overlay */}
+          <BlurView
+            style={StyleSheet.absoluteFill}
+            intensity={100}
+            tint={colorScheme === 'light' ? 'light' : 'dark'}
+          />
+
+          {/* Modal Container Card */}
+          <View style={[styles.modalCard, { backgroundColor: theme.surface }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              Are you sure you want to logout?
+            </Text>
+            <Text
+              style={[
+                styles.modalDescription,
+                { color: colorScheme === 'light' ? '#4B5563' : '#9BA1A6' },
+              ]}
+            >
+              You will be logged out of your account and returned to the login screen. Would you like to proceed?
+            </Text>
+
+            <View
+              style={[
+                styles.modalDivider,
+                { backgroundColor: colorScheme === 'light' ? '#E5E7EB' : '#374151' },
+              ]}
+            />
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setLogoutModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.modalCancelButtonText, { color: theme.text }]}>Cancel</Text>
+              </TouchableOpacity>
+
+              <View
+                style={[
+                  styles.modalVerticalDivider,
+                  { backgroundColor: colorScheme === 'light' ? '#E5E7EB' : '#374151' },
+                ]}
+              />
+
+              <TouchableOpacity
+                style={styles.modalConfirmButton}
+                onPress={() => {
+                  setLogoutModalVisible(false);
+                  router.replace('/login');
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalConfirmButtonText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -564,6 +665,75 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(10),
     fontWeight: '700',
     marginHorizontal: scale(4),
+  },
+
+  // Modal styles
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: scale(32),
+  },
+  modalCard: {
+    width: '100%',
+    borderRadius: moderateScale(14),
+    paddingTop: verticalScale(20),
+    // Soft shadow for the dialog card
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  modalTitle: {
+    fontSize: moderateScale(15),
+    fontWeight: '700',
+    textAlign: 'center',
+    paddingHorizontal: scale(16),
+    marginBottom: verticalScale(10),
+  },
+  modalDescription: {
+    fontSize: moderateScale(12),
+    textAlign: 'center',
+    lineHeight: verticalScale(16),
+    paddingHorizontal: scale(20),
+    marginBottom: verticalScale(20),
+  },
+  modalDivider: {
+    height: 1,
+    width: '100%',
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    height: verticalScale(46),
+    alignItems: 'center',
+  },
+  modalCancelButton: {
+    flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelButtonText: {
+    fontSize: moderateScale(14),
+    fontWeight: '600',
+  },
+  modalVerticalDivider: {
+    width: 1,
+    height: '100%',
+  },
+  modalConfirmButton: {
+    flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalConfirmButtonText: {
+    fontSize: moderateScale(14),
+    fontWeight: '700',
+    color: '#EF4444', // Red for logout
   },
 });
 

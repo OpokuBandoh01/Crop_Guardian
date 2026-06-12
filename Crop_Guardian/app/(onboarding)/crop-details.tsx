@@ -1,45 +1,54 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// app/(onboarding)/crop-details
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { AuthHeader } from '@/components/AuthHeader';
-import { CustomButton } from '@/components/CustomButton';
+import { AuthHeader } from "@/components/AuthHeader";
+import { CustomButton } from "@/components/CustomButton";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
-type GrowthStage = 'Planting' | 'Growing' | 'Harvesting';
+type GrowthStage = "Planting" | "Growing" | "Harvesting";
 
 export default function CropDetailsScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? 'light';
+  const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
-  
+
   const [selectedCrops, setSelectedCrops] = useState<string[]>([]);
   const [cropStages, setCropStages] = useState<Record<string, GrowthStage>>({});
 
   useEffect(() => {
     const loadCrops = async () => {
       try {
-        const cropsRaw = await AsyncStorage.getItem('onboarding_preferredCrops');
+        const cropsRaw = await AsyncStorage.getItem(
+          "onboarding_preferredCrops",
+        );
         if (cropsRaw) {
           const parsed = JSON.parse(cropsRaw) as string[];
           setSelectedCrops(parsed);
-          
+
           const initialStages: Record<string, GrowthStage> = {};
           parsed.forEach((crop) => {
-            initialStages[crop] = 'Growing';
+            initialStages[crop] = "Growing";
           });
           setCropStages(initialStages);
         } else {
-          setSelectedCrops(['MAIZE']);
-          setCropStages({ 'MAIZE': 'Growing' });
+          setSelectedCrops(["MAIZE"]);
+          setCropStages({ MAIZE: "Growing" });
         }
       } catch (e) {
-        console.error('Error loading onboarding crops:', e);
+        console.error("Error loading onboarding crops:", e);
       }
     };
     loadCrops();
@@ -47,9 +56,9 @@ export default function CropDetailsScreen() {
 
   const handleSave = async () => {
     try {
-      const onboardingRole = await AsyncStorage.getItem('onboarding_role');
-      
-      const cached = await AsyncStorage.getItem('userData');
+      const onboardingRole = await AsyncStorage.getItem("onboarding_role");
+
+      const cached = await AsyncStorage.getItem("userData");
       let parsedUserData: any = {};
       if (cached) {
         parsedUserData = JSON.parse(cached);
@@ -59,26 +68,33 @@ export default function CropDetailsScreen() {
         parsedUserData.profile = {};
       }
       parsedUserData.profile.preferredCrops = selectedCrops;
-      parsedUserData.role = onboardingRole || 'FARMER';
+      parsedUserData.role = onboardingRole || "FARMER";
       parsedUserData.isOnboarded = true;
 
-      await AsyncStorage.setItem('onboarding_cropStages', JSON.stringify(cropStages));
-      await AsyncStorage.setItem('userData', JSON.stringify(parsedUserData));
+      await AsyncStorage.setItem(
+        "onboarding_cropStages",
+        JSON.stringify(cropStages),
+      );
+      await AsyncStorage.setItem("userData", JSON.stringify(parsedUserData));
     } catch (err) {
-      console.error('Error saving onboarding data:', err);
+      console.error("Error saving onboarding data:", err);
     }
 
-    router.replace('/(tabs)');
+    router.replace("/(tabs)");
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.background }]}
+    >
       <View style={styles.headerWrapper}>
         <AuthHeader />
       </View>
-      
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.headerTextContainer}>
           <Text style={[styles.title, { color: theme.text }]}>
             Tell us more(optional)
@@ -89,15 +105,28 @@ export default function CropDetailsScreen() {
         </View>
 
         <View style={styles.formContainer}>
-          
           {selectedCrops.map((cropKey) => {
-            const cropDisplayName = cropKey.charAt(0).toUpperCase() + cropKey.slice(1).toLowerCase();
-            const currentStage = cropStages[cropKey] || 'Growing';
+            const cropDisplayName =
+              cropKey.charAt(0).toUpperCase() + cropKey.slice(1).toLowerCase();
+            const currentStage = cropStages[cropKey] || "Growing";
 
             return (
-              <View key={cropKey} style={[styles.cropCardContainer, { backgroundColor: theme.surface, borderColor: theme.inputBorder }]}>
+              <View
+                key={cropKey}
+                style={[
+                  styles.cropCardContainer,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.inputBorder,
+                  },
+                ]}
+              >
                 <View style={styles.cropCardHeader}>
-                  <Ionicons name="leaf-outline" size={moderateScale(18)} color={theme.primary} />
+                  <Ionicons
+                    name="leaf-outline"
+                    size={moderateScale(18)}
+                    color={theme.primary}
+                  />
                   <Text style={[styles.cropTitleText, { color: theme.text }]}>
                     {cropDisplayName}
                   </Text>
@@ -105,32 +134,40 @@ export default function CropDetailsScreen() {
 
                 {/* Growth Stage Selector */}
                 <View style={styles.stageFieldContainer}>
-                  <Text style={[styles.stageLabel, { color: theme.icon }]}>Select Growth Stage</Text>
+                  <Text style={[styles.stageLabel, { color: theme.icon }]}>
+                    Select Growth Stage
+                  </Text>
                   <View style={styles.stageButtonsContainer}>
-                    {(['Planting', 'Growing', 'Harvesting'] as GrowthStage[]).map((stage) => {
+                    {(
+                      ["Planting", "Growing", "Harvesting"] as GrowthStage[]
+                    ).map((stage) => {
                       const isSelected = currentStage === stage;
                       return (
                         <TouchableOpacity
                           key={stage}
                           style={[
                             styles.stageButton,
-                            { 
-                              borderColor: theme.primary, 
-                              backgroundColor: isSelected ? theme.primary : theme.surface 
-                            }
+                            {
+                              borderColor: theme.primary,
+                              backgroundColor: isSelected
+                                ? theme.primary
+                                : theme.surface,
+                            },
                           ]}
                           onPress={() => {
-                            setCropStages(prev => ({
+                            setCropStages((prev) => ({
                               ...prev,
-                              [cropKey]: stage
+                              [cropKey]: stage,
                             }));
                           }}
                           activeOpacity={0.7}
                         >
-                          <Text style={[
-                            styles.stageButtonText, 
-                            { color: isSelected ? '#FFFFFF' : theme.text }
-                          ]}>
+                          <Text
+                            style={[
+                              styles.stageButtonText,
+                              { color: isSelected ? "#FFFFFF" : theme.text },
+                            ]}
+                          >
                             {stage}
                           </Text>
                         </TouchableOpacity>
@@ -145,24 +182,28 @@ export default function CropDetailsScreen() {
           {/* Location Selector */}
           <View style={styles.fieldContainer}>
             <Text style={[styles.label, { color: theme.text }]}>Location</Text>
-            <TouchableOpacity 
-              style={[styles.inputBox, { borderColor: theme.primary, backgroundColor: theme.surface }]}
+            <TouchableOpacity
+              style={[
+                styles.inputBox,
+                { borderColor: theme.primary, backgroundColor: theme.surface },
+              ]}
               activeOpacity={0.7}
             >
-              <Text style={[styles.inputText, { color: theme.text }]}>Select your location</Text>
-              <Ionicons name="location-outline" size={moderateScale(20)} color={theme.primary} />
+              <Text style={[styles.inputText, { color: theme.text }]}>
+                Select your location
+              </Text>
+              <Ionicons
+                name="location-outline"
+                size={moderateScale(20)}
+                color={theme.primary}
+              />
             </TouchableOpacity>
           </View>
-
         </View>
-
       </ScrollView>
 
       <View style={styles.footer}>
-        <CustomButton 
-          title="Save Crop" 
-          onPress={handleSave} 
-        />
+        <CustomButton title="Save Crop" onPress={handleSave} />
       </View>
     </SafeAreaView>
   );
@@ -180,20 +221,20 @@ const styles = StyleSheet.create({
     paddingBottom: verticalScale(40),
   },
   headerTextContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: verticalScale(0),
     marginBottom: verticalScale(40),
   },
   title: {
     fontSize: moderateScale(26),
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: verticalScale(8),
-    textAlign: 'center',
+    textAlign: "center",
   },
   subtitle: {
     fontSize: moderateScale(14),
-    fontWeight: '400',
-    textAlign: 'center',
+    fontWeight: "400",
+    textAlign: "center",
   },
   formContainer: {
     gap: verticalScale(30),
@@ -203,19 +244,19 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: moderateScale(14),
-    fontWeight: '600',
+    fontWeight: "600",
     marginLeft: scale(2),
   },
   inputBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: scale(16),
     height: verticalScale(50),
     borderWidth: 1,
     borderRadius: moderateScale(8),
     // Drop shadow
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -225,19 +266,19 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(14),
   },
   stageButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     gap: scale(10),
   },
   stageButton: {
     flex: 1,
     height: verticalScale(45),
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 1,
     borderRadius: moderateScale(8),
     // Drop shadow
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -245,7 +286,7 @@ const styles = StyleSheet.create({
   },
   stageButtonText: {
     fontSize: moderateScale(14),
-    fontWeight: '500',
+    fontWeight: "500",
   },
   footer: {
     paddingHorizontal: scale(20),
@@ -256,27 +297,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: scale(14),
     marginBottom: verticalScale(10),
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
     shadowRadius: 4,
     elevation: 1,
   },
   cropCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: verticalScale(12),
     gap: scale(6),
   },
   cropTitleText: {
     fontSize: moderateScale(15),
-    fontWeight: '700',
+    fontWeight: "700",
   },
   stageFieldContainer: {
     gap: verticalScale(8),
   },
   stageLabel: {
     fontSize: moderateScale(12),
-    fontWeight: '500',
+    fontWeight: "500",
   },
 });

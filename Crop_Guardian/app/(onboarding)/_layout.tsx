@@ -1,4 +1,5 @@
-import { Stack } from 'expo-router';
+// app/(onboarding)/_layout
+import { Stack } from "expo-router";
 
 export default function OnboardingLayout() {
   return (

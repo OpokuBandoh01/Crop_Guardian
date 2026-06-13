@@ -42,12 +42,15 @@ export const useAuthStore = create<AuthStore>()(
         }),
 
       // NEW ADDITION: logout handler
-      logout: () =>
+      logout: () => {
+        AsyncStorage.removeItem("userToken").catch(() => {});
+        AsyncStorage.removeItem("userData").catch(() => {});
         set({
           token: null,
           user: null,
           isAuthenticated: false,
-        }),
+        });
+      },
 
       setHasHydrated: (state) =>
         set({

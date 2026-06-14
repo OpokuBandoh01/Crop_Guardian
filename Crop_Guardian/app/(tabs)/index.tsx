@@ -1,30 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Location from "expo-location";
+import { useNavigation, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
+  Dimensions,
   Image,
-  Dimensions
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-import { useRouter, useNavigation } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Location from 'expo-location';
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import API from '@/services/api';
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import API from "@/services/api";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 export default function HomeScreen() {
   const router = useRouter();
   const navigation = useNavigation();
-  const colorScheme = useColorScheme() ?? 'light';
+  const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
 
   const [userData, setUserData] = useState<any>(null);
@@ -34,14 +34,14 @@ export default function HomeScreen() {
 
   const fetchUser = async () => {
     try {
-      const res = await API.get('/api/auth/me');
+      const res = await API.get("/api/auth/me");
       if (res.data?.success && res.data.user) {
         setUserData(res.data.user);
-        await AsyncStorage.setItem('userData', JSON.stringify(res.data.user));
+        await AsyncStorage.setItem("userData", JSON.stringify(res.data.user));
       }
     } catch (err) {
-      console.warn('Error fetching me from API, using cache:', err);
-      const cached = await AsyncStorage.getItem('userData');
+      console.warn("Error fetching me from API, using cache:", err);
+      const cached = await AsyncStorage.getItem("userData");
       if (cached) {
         try {
           setUserData(JSON.parse(cached));
@@ -54,32 +54,34 @@ export default function HomeScreen() {
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
       let params = {};
-      if (status === 'granted') {
+      if (status === "granted") {
         const loc = await Location.getCurrentPositionAsync({});
         params = { lat: loc.coords.latitude, lon: loc.coords.longitude };
       }
-      const res = await API.get('/api/weather/forecast', { params });
+      const res = await API.get("/api/weather/forecast", { params });
       if (res.data?.success && res.data.data) {
         setWeatherData(res.data.data);
       }
     } catch (err) {
-      console.error('Error fetching weather:', err);
+      console.error("Error fetching weather:", err);
     }
   };
 
   const fetchMyCrops = async () => {
     try {
-      const res = await API.get('/api/crops/my-crops');
+      const res = await API.get("/api/crops/my-crops");
       if (res.data?.success && res.data.crops && res.data.crops.length > 0) {
         setMyCrops(res.data.crops);
         return;
       }
     } catch (err) {
-      console.error('Error fetching my crops:', err);
+      console.error("Error fetching my crops:", err);
     }
 
     try {
-      const onboardingCropsRaw = await AsyncStorage.getItem('onboarding_preferredCrops');
+      const onboardingCropsRaw = await AsyncStorage.getItem(
+        "onboarding_preferredCrops",
+      );
       if (onboardingCropsRaw) {
         const parsed = JSON.parse(onboardingCropsRaw) as string[];
         const mappedCrops = parsed.map((cropName) => ({
@@ -88,31 +90,21 @@ export default function HomeScreen() {
         setMyCrops(mappedCrops);
       }
 
-      const stagesRaw = await AsyncStorage.getItem('onboarding_cropStages');
+      const stagesRaw = await AsyncStorage.getItem("onboarding_cropStages");
       if (stagesRaw) {
         setCropStages(JSON.parse(stagesRaw));
       }
     } catch (e) {
-      console.error('Error loading fallback crops/stages:', e);
+      console.error("Error loading fallback crops/stages:", e);
     }
   };
 
   useEffect(() => {
-    const initHomeScreen = async () => {
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) {
-        router.replace('/login');
-        return;
-      }
+    fetchUser();
+    fetchWeather();
+    fetchMyCrops();
 
-      fetchUser();
-      fetchWeather();
-      fetchMyCrops();
-    };
-
-    initHomeScreen();
-
-    const unsubscribe = navigation.addListener('focus', () => {
+    const unsubscribe = navigation.addListener("focus", () => {
       fetchUser();
       fetchMyCrops();
     });
@@ -121,39 +113,60 @@ export default function HomeScreen() {
   }, [navigation]);
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.background }]}
+      edges={["top", "left", "right"]}
+    >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-
         {/* ================= HEADER SECTION ================= */}
         <View style={styles.headerContainer}>
           <View style={styles.headerLeft}>
             <View style={styles.greetingRow}>
               <Text style={[styles.greetingText, { color: theme.text }]}>
-                Good morning, {userData?.profile?.fullName?.split(' ')[0] || 'Farmer'}!
+                Good morning,{" "}
+                {userData?.profile?.fullName?.split(" ")[0] || "Farmer"}!
               </Text>
               <Image
-                source={require('@/assets/icons/seedlingicon.png')}
+                source={require("@/assets/icons/seedlingicon.png")}
                 style={styles.seedlingIcon}
                 resizeMode="contain"
               />
             </View>
             <Text style={[styles.subtitleText, { color: theme.icon }]}>
-              {"Let's make today a productive"}{'\n'}{" day on your farm."}
+              {"Let's make today a productive"}
+              {"\n"}
+              {" day on your farm."}
             </Text>
           </View>
 
-          <TouchableOpacity style={styles.notificationButton} activeOpacity={0.7}>
-            <Ionicons name="notifications-outline" size={moderateScale(24)} color={theme.primary} />
+          <TouchableOpacity
+            style={styles.notificationButton}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={moderateScale(24)}
+              color={theme.primary}
+            />
           </TouchableOpacity>
         </View>
 
         {/* ================= WEATHER SECTION ================= */}
-        <View style={[styles.weatherWidget, { backgroundColor: colorScheme === 'light' ? '#EBF7E9' : '#1E2C20' }]}>
+        <View
+          style={[
+            styles.weatherWidget,
+            {
+              backgroundColor: colorScheme === "light" ? "#EBF7E9" : "#1E2C20",
+            },
+          ]}
+        >
           <View style={styles.weatherLeft}>
-            <Text style={[styles.weatherLocation, { color: theme.text }]}>Kumasi, Ashanti</Text>
+            <Text style={[styles.weatherLocation, { color: theme.text }]}>
+              Kumasi, Ashanti
+            </Text>
 
             <View style={styles.tempRow}>
               <Ionicons
@@ -163,57 +176,105 @@ export default function HomeScreen() {
                 style={styles.weatherStateIcon}
               />
               <Text style={[styles.tempText, { color: theme.text }]}>
-                {weatherData?.current?.temp ? `${weatherData.current.temp.toFixed(0)}°C` : '28°C'}
+                {weatherData?.current?.temp
+                  ? `${weatherData.current.temp.toFixed(0)}°C`
+                  : "28°C"}
               </Text>
             </View>
 
             <Text style={[styles.weatherDesc, { color: theme.text }]}>
-              {weatherData?.overallSummary || 'Light rain expected at 4PM'}
+              {weatherData?.overallSummary || "Light rain expected at 4PM"}
             </Text>
 
             <TouchableOpacity
-              style={[styles.forecastButton, { backgroundColor: colorScheme === 'light' ? '#C8E6C9' : '#2E3D30' }]}
+              style={[
+                styles.forecastButton,
+                {
+                  backgroundColor:
+                    colorScheme === "light" ? "#C8E6C9" : "#2E3D30",
+                },
+              ]}
               activeOpacity={0.8}
-              onPress={() => router.push('/weather')}
+              onPress={() => router.push("/weather")}
             >
-              <Text style={[styles.forecastButtonText, { color: theme.primary }]}>View full forecast</Text>
-              <Ionicons name="chevron-forward" size={moderateScale(12)} color={theme.primary} />
+              <Text
+                style={[styles.forecastButtonText, { color: theme.primary }]}
+              >
+                View full forecast
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={moderateScale(12)}
+                color={theme.primary}
+              />
             </TouchableOpacity>
           </View>
 
           {/* Vertical divider line */}
-          <View style={[styles.weatherDivider, { backgroundColor: colorScheme === 'light' ? '#D0E9CD' : '#2E3D30' }]} />
+          <View
+            style={[
+              styles.weatherDivider,
+              {
+                backgroundColor:
+                  colorScheme === "light" ? "#D0E9CD" : "#2E3D30",
+              },
+            ]}
+          />
 
           <View style={styles.weatherRight}>
             {/* Humidity */}
             <View style={styles.weatherStatItem}>
-              <Ionicons name="water-outline" size={moderateScale(18)} color={theme.primary} />
+              <Ionicons
+                name="water-outline"
+                size={moderateScale(18)}
+                color={theme.primary}
+              />
               <View style={styles.weatherStatTextWrapper}>
-                <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>Humidity</Text>
+                <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>
+                  Humidity
+                </Text>
                 <Text style={[styles.weatherStatValue, { color: theme.text }]}>
-                  {weatherData?.current?.humidity ? `${weatherData.current.humidity}%` : '70%'}
+                  {weatherData?.current?.humidity
+                    ? `${weatherData.current.humidity}%`
+                    : "70%"}
                 </Text>
               </View>
             </View>
 
             {/* Wind */}
             <View style={styles.weatherStatItem}>
-              <Ionicons name="leaf-outline" size={moderateScale(18)} color={theme.primary} />
+              <Ionicons
+                name="leaf-outline"
+                size={moderateScale(18)}
+                color={theme.primary}
+              />
               <View style={styles.weatherStatTextWrapper}>
-                <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>Wind</Text>
+                <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>
+                  Wind
+                </Text>
                 <Text style={[styles.weatherStatValue, { color: theme.text }]}>
-                  {weatherData?.current?.windSpeed ? `${weatherData.current.windSpeed} km/h` : 'Moderate'}
+                  {weatherData?.current?.windSpeed
+                    ? `${weatherData.current.windSpeed} km/h`
+                    : "Moderate"}
                 </Text>
               </View>
             </View>
 
             {/* Feels like */}
             <View style={styles.weatherStatItem}>
-              <Ionicons name="thermometer-outline" size={moderateScale(18)} color={theme.primary} />
+              <Ionicons
+                name="thermometer-outline"
+                size={moderateScale(18)}
+                color={theme.primary}
+              />
               <View style={styles.weatherStatTextWrapper}>
-                <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>Feels like</Text>
+                <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>
+                  Feels like
+                </Text>
                 <Text style={[styles.weatherStatValue, { color: theme.text }]}>
-                  {weatherData?.current?.feelsLike ? `${weatherData.current.feelsLike.toFixed(0)}°C` : '30°C'}
+                  {weatherData?.current?.feelsLike
+                    ? `${weatherData.current.feelsLike.toFixed(0)}°C`
+                    : "30°C"}
                 </Text>
               </View>
             </View>
@@ -224,7 +285,7 @@ export default function HomeScreen() {
         <View style={styles.scanBanner}>
           {/* Background image on the right */}
           <Image
-            source={require('@/assets/images/leafimage.png')}
+            source={require("@/assets/images/leafimage.png")}
             style={styles.scanBannerBg}
             resizeMode="cover"
           />
@@ -233,26 +294,40 @@ export default function HomeScreen() {
 
           {/* Left Contents */}
           <View style={styles.scanLeftContent}>
-            <Text style={styles.scanTitle}>Scan Your Crop{'\n'}for Diseases</Text>
-            <Text style={styles.scanSubtitle}>Get instant AI diagnosis and recommended solutions</Text>
+            <Text style={styles.scanTitle}>
+              Scan Your Crop{"\n"}for Diseases
+            </Text>
+            <Text style={styles.scanSubtitle}>
+              Get instant AI diagnosis and recommended solutions
+            </Text>
 
             {/* Quick scanning triggers */}
             <View style={styles.scanActionContainer}>
               <TouchableOpacity
                 style={styles.scanActionButtonSolid}
-                onPress={() => router.push('/scan?action=camera')}
+                onPress={() => router.push("/scan?action=camera")}
                 activeOpacity={0.9}
               >
-                <Ionicons name="camera" size={moderateScale(16)} color="#094A04" style={styles.scanActionIcon} />
+                <Ionicons
+                  name="camera"
+                  size={moderateScale(16)}
+                  color="#094A04"
+                  style={styles.scanActionIcon}
+                />
                 <Text style={styles.scanActionTextSolid}>Take photo</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.scanActionButtonOutline}
-                onPress={() => router.push('/scan?action=gallery')}
+                onPress={() => router.push("/scan?action=gallery")}
                 activeOpacity={0.8}
               >
-                <Ionicons name="image-outline" size={moderateScale(16)} color="#FFFFFF" style={styles.scanActionIcon} />
+                <Ionicons
+                  name="image-outline"
+                  size={moderateScale(16)}
+                  color="#FFFFFF"
+                  style={styles.scanActionIcon}
+                />
                 <Text style={styles.scanActionTextOutline}>Upload Image</Text>
               </TouchableOpacity>
             </View>
@@ -261,7 +336,7 @@ export default function HomeScreen() {
           {/* Right Camera Overlay */}
           <View style={styles.scanRightOverlay}>
             <Image
-              source={require('@/assets/icons/bigcameraicon.png')}
+              source={require("@/assets/icons/bigcameraicon.png")}
               style={styles.bigCameraIcon}
               resizeMode="contain"
             />
@@ -272,14 +347,21 @@ export default function HomeScreen() {
         <View style={styles.sectionHeader}>
           <View style={styles.sectionHeaderTitleWrapper}>
             <Image
-              source={require('@/assets/icons/seedlingicon.png')}
+              source={require("@/assets/icons/seedlingicon.png")}
               style={[styles.sectionHeaderIcon, { tintColor: theme.primary }]}
               resizeMode="contain"
             />
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Farm Health Overview</Text>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>
+              Farm Health Overview
+            </Text>
           </View>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/my-crops')}>
-            <Text style={[styles.viewAllLink, { color: theme.icon }]}>View My Crops</Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.push("/my-crops")}
+          >
+            <Text style={[styles.viewAllLink, { color: theme.icon }]}>
+              View My Crops
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -288,28 +370,46 @@ export default function HomeScreen() {
           {myCrops.length > 0 ? (
             myCrops.slice(0, 2).map((cropItem, idx) => {
               const cropName = cropItem.cropType.toLowerCase();
-              const formattedName = cropName.charAt(0).toUpperCase() + cropName.slice(1);
+              const formattedName =
+                cropName.charAt(0).toUpperCase() + cropName.slice(1);
               const isWarning = idx === 1; // variance for rich presentation
 
-              let cropIcon = require('@/assets/icons/maizeicon.png');
-              if (cropName === 'cassava') cropIcon = require('@/assets/icons/cassavaicon.png');
-              else if (cropName === 'tomato') cropIcon = require('@/assets/icons/seedlingicon.png');
-              else if (cropName === 'pepper') cropIcon = require('@/assets/icons/twoleaficon.png');
-              else if (cropName === 'rice') cropIcon = require('@/assets/icons/maizeicon.png');
-              else if (cropName === 'plantain') cropIcon = require('@/assets/icons/mycropsicon.png');
-              else if (cropName === 'yam') cropIcon = require('@/assets/icons/cassavaicon.png');
-              else if (cropName === 'cocoa') cropIcon = require('@/assets/icons/tipsicon.png');
-              else if (cropName === 'groundnut') cropIcon = require('@/assets/icons/twoleaficon.png');
-              else if (cropName === 'onion') cropIcon = require('@/assets/icons/seedlingicon.png');
+              let cropIcon = require("@/assets/icons/maizeicon.png");
+              if (cropName === "cassava")
+                cropIcon = require("@/assets/icons/cassavaicon.png");
+              else if (cropName === "tomato")
+                cropIcon = require("@/assets/icons/seedlingicon.png");
+              else if (cropName === "pepper")
+                cropIcon = require("@/assets/icons/twoleaficon.png");
+              else if (cropName === "rice")
+                cropIcon = require("@/assets/icons/maizeicon.png");
+              else if (cropName === "plantain")
+                cropIcon = require("@/assets/icons/mycropsicon.png");
+              else if (cropName === "yam")
+                cropIcon = require("@/assets/icons/cassavaicon.png");
+              else if (cropName === "cocoa")
+                cropIcon = require("@/assets/icons/tipsicon.png");
+              else if (cropName === "groundnut")
+                cropIcon = require("@/assets/icons/twoleaficon.png");
+              else if (cropName === "onion")
+                cropIcon = require("@/assets/icons/seedlingicon.png");
 
-              const growthStage = cropStages[cropItem.cropType] || 'Growing';
+              const growthStage = cropStages[cropItem.cropType] || "Growing";
 
               return (
-                <View 
+                <View
                   key={idx}
                   style={[
-                    styles.overviewCard, 
-                    { backgroundColor: isWarning ? (colorScheme === 'light' ? '#FFFCE2' : '#2D2B1C') : (colorScheme === 'light' ? '#EBF7E9' : '#1E2C20') }
+                    styles.overviewCard,
+                    {
+                      backgroundColor: isWarning
+                        ? colorScheme === "light"
+                          ? "#FFFCE2"
+                          : "#2D2B1C"
+                        : colorScheme === "light"
+                          ? "#EBF7E9"
+                          : "#1E2C20",
+                    },
                   ]}
                 >
                   <View style={styles.overviewCardHeader}>
@@ -319,11 +419,21 @@ export default function HomeScreen() {
                       resizeMode="contain"
                     />
                   </View>
-                  <Text style={[styles.cropNameText, { color: theme.text }]}>{formattedName}</Text>
-                  <Text style={isWarning ? styles.cropStatusWarning : styles.cropStatusHealthy}>
-                    {isWarning ? 'Needs attention' : 'Healthy'}
+                  <Text style={[styles.cropNameText, { color: theme.text }]}>
+                    {formattedName}
                   </Text>
-                  <Text style={[styles.cropConditionSub, { color: theme.icon }]}>
+                  <Text
+                    style={
+                      isWarning
+                        ? styles.cropStatusWarning
+                        : styles.cropStatusHealthy
+                    }
+                  >
+                    {isWarning ? "Needs attention" : "Healthy"}
+                  </Text>
+                  <Text
+                    style={[styles.cropConditionSub, { color: theme.icon }]}
+                  >
                     {growthStage} Stage
                   </Text>
                 </View>
@@ -332,111 +442,178 @@ export default function HomeScreen() {
           ) : (
             <>
               {/* Maize Card */}
-              <View style={[styles.overviewCard, { backgroundColor: colorScheme === 'light' ? '#EBF7E9' : '#1E2C20' }]}>
+              <View
+                style={[
+                  styles.overviewCard,
+                  {
+                    backgroundColor:
+                      colorScheme === "light" ? "#EBF7E9" : "#1E2C20",
+                  },
+                ]}
+              >
                 <View style={styles.overviewCardHeader}>
                   <Image
-                    source={require('@/assets/icons/maizeicon.png')}
+                    source={require("@/assets/icons/maizeicon.png")}
                     style={styles.cropIcon}
                     resizeMode="contain"
                   />
                 </View>
-                <Text style={[styles.cropNameText, { color: theme.text }]}>Maize</Text>
+                <Text style={[styles.cropNameText, { color: theme.text }]}>
+                  Maize
+                </Text>
                 <Text style={styles.cropStatusHealthy}>Healthy</Text>
-                <Text style={[styles.cropConditionSub, { color: theme.icon }]}>Good condition</Text>
+                <Text style={[styles.cropConditionSub, { color: theme.icon }]}>
+                  Good condition
+                </Text>
               </View>
 
               {/* Cassava Card */}
-              <View style={[styles.overviewCard, { backgroundColor: colorScheme === 'light' ? '#FFFCE2' : '#2D2B1C' }]}>
+              <View
+                style={[
+                  styles.overviewCard,
+                  {
+                    backgroundColor:
+                      colorScheme === "light" ? "#FFFCE2" : "#2D2B1C",
+                  },
+                ]}
+              >
                 <View style={styles.overviewCardHeader}>
                   <Image
-                    source={require('@/assets/icons/cassavaicon.png')}
+                    source={require("@/assets/icons/cassavaicon.png")}
                     style={styles.cropIcon}
                     resizeMode="contain"
                   />
                 </View>
-                <Text style={[styles.cropNameText, { color: theme.text }]}>Cassava</Text>
+                <Text style={[styles.cropNameText, { color: theme.text }]}>
+                  Cassava
+                </Text>
                 <Text style={styles.cropStatusWarning}>Needs attention</Text>
-                <Text style={[styles.cropConditionSub, { color: theme.icon }]}>Check now</Text>
+                <Text style={[styles.cropConditionSub, { color: theme.icon }]}>
+                  Check now
+                </Text>
               </View>
             </>
           )}
 
           {/* Alerts Card */}
-          <View style={[styles.overviewCard, { backgroundColor: '#FEE5F5' }]}>
+          <View style={[styles.overviewCard, { backgroundColor: "#FEE5F5" }]}>
             <View style={styles.overviewCardHeader}>
-              <View style={[styles.alertIconBg, { backgroundColor: '#E480C8' }]}>
+              <View
+                style={[styles.alertIconBg, { backgroundColor: "#E480C8" }]}
+              >
                 <Image
-                  source={require('@/assets/icons/alerticon.png')}
+                  source={require("@/assets/icons/alerticon.png")}
                   style={styles.cropIcon}
                   resizeMode="contain"
                 />
               </View>
             </View>
-            <Text style={[styles.cropNameText, { color: '#11181C' }]}>2 Alerts</Text>
+            <Text style={[styles.cropNameText, { color: "#11181C" }]}>
+              2 Alerts
+            </Text>
             <Text style={styles.cropStatusAlert}>This week</Text>
-            <Text style={[styles.cropConditionSub, { color: '#687076' }]}>Tap to view</Text>
+            <Text style={[styles.cropConditionSub, { color: "#687076" }]}>
+              Tap to view
+            </Text>
           </View>
         </View>
 
         {/* ================= QUICK ACTIONS ================= */}
         <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Quick Actions</Text>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            Quick Actions
+          </Text>
           <TouchableOpacity activeOpacity={0.7}>
-            <Text style={[styles.viewAllLink, { color: theme.icon }]}>See all <Ionicons name="chevron-forward" size={moderateScale(10)} /></Text>
+            <Text style={[styles.viewAllLink, { color: theme.icon }]}>
+              See all{" "}
+              <Ionicons name="chevron-forward" size={moderateScale(10)} />
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* Quick action grid items */}
         <View style={styles.quickActionsRow}>
           <TouchableOpacity
-            style={[styles.quickActionBtn, { borderColor: theme.inputBorder, backgroundColor: theme.surface }]}
-            onPress={() => router.push('/scan')}
+            style={[
+              styles.quickActionBtn,
+              {
+                borderColor: theme.inputBorder,
+                backgroundColor: theme.surface,
+              },
+            ]}
+            onPress={() => router.push("/scan")}
             activeOpacity={0.8}
           >
             <Image
-              source={require('@/assets/icons/scancropsicon.png')}
+              source={require("@/assets/icons/scancropsicon.png")}
               style={styles.quickActionIcon}
               resizeMode="contain"
             />
-            <Text style={[styles.quickActionText, { color: theme.text }]}>Scan crop</Text>
+            <Text style={[styles.quickActionText, { color: theme.text }]}>
+              Scan crop
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.quickActionBtn, { borderColor: theme.inputBorder, backgroundColor: theme.surface }]}
+            style={[
+              styles.quickActionBtn,
+              {
+                borderColor: theme.inputBorder,
+                backgroundColor: theme.surface,
+              },
+            ]}
             activeOpacity={0.8}
-            onPress={() => router.push('/weather')}
+            onPress={() => router.push("/weather")}
           >
             <Image
-              source={require('@/assets/icons/weathericon.png')}
+              source={require("@/assets/icons/weathericon.png")}
               style={styles.quickActionIcon}
               resizeMode="contain"
             />
-            <Text style={[styles.quickActionText, { color: theme.text }]}>Weather</Text>
+            <Text style={[styles.quickActionText, { color: theme.text }]}>
+              Weather
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.quickActionBtn, { borderColor: theme.inputBorder, backgroundColor: theme.surface }]}
+            style={[
+              styles.quickActionBtn,
+              {
+                borderColor: theme.inputBorder,
+                backgroundColor: theme.surface,
+              },
+            ]}
             activeOpacity={0.8}
           >
             <Image
-              source={require('@/assets/icons/tipsicon.png')}
+              source={require("@/assets/icons/tipsicon.png")}
               style={styles.quickActionIcon}
               resizeMode="contain"
             />
-            <Text style={[styles.quickActionText, { color: theme.text }]}>Tips</Text>
+            <Text style={[styles.quickActionText, { color: theme.text }]}>
+              Tips
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.quickActionBtn, { borderColor: theme.inputBorder, backgroundColor: theme.surface }]}
-            onPress={() => router.push('/my-crops')}
+            style={[
+              styles.quickActionBtn,
+              {
+                borderColor: theme.inputBorder,
+                backgroundColor: theme.surface,
+              },
+            ]}
+            onPress={() => router.push("/my-crops")}
             activeOpacity={0.8}
           >
             <Image
-              source={require('@/assets/icons/mycropsicon.png')}
+              source={require("@/assets/icons/mycropsicon.png")}
               style={styles.quickActionIcon}
               resizeMode="contain"
             />
-            <Text style={[styles.quickActionText, { color: theme.text }]}>My Crops</Text>
+            <Text style={[styles.quickActionText, { color: theme.text }]}>
+              My Crops
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -453,7 +630,12 @@ export default function HomeScreen() {
             {/* Split layout inside */}
             <View style={styles.dailyTipLeft}>
               <View style={styles.cardHeaderRow}>
-                <Ionicons name="bulb-outline" size={moderateScale(16)} color="#094A04" style={styles.cardHeaderIcon} />
+                <Ionicons
+                  name="bulb-outline"
+                  size={moderateScale(16)}
+                  color="#094A04"
+                  style={styles.cardHeaderIcon}
+                />
                 <Text style={styles.dailyTipHeaderTitle}>Daily Tip</Text>
               </View>
               <Text style={styles.dailyTipBody}>
@@ -466,7 +648,7 @@ export default function HomeScreen() {
 
             <View style={styles.dailyTipRight}>
               <Image
-                source={require('@/assets/images/dailytipimage.png')}
+                source={require("@/assets/images/dailytipimage.png")}
                 style={styles.dailyTipImage}
                 resizeMode="cover"
               />
@@ -474,17 +656,30 @@ export default function HomeScreen() {
           </View>
 
           {/* Card 2: Recent Scan */}
-          <View style={[styles.bottomCard, styles.recentScanCard, { backgroundColor: '#E1F8DE' }]}>
+          <View
+            style={[
+              styles.bottomCard,
+              styles.recentScanCard,
+              { backgroundColor: "#E1F8DE" },
+            ]}
+          >
             <View style={styles.recentScanHeader}>
               <Text style={styles.recentScanTitle}>Recent Scan</Text>
-              <TouchableOpacity activeOpacity={0.7} style={styles.seeAllRecentRow}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={styles.seeAllRecentRow}
+              >
                 <Text style={styles.recentScanSeeAll}>See all</Text>
-                <Ionicons name="chevron-forward" size={moderateScale(10)} color="#2E7D32" />
+                <Ionicons
+                  name="chevron-forward"
+                  size={moderateScale(10)}
+                  color="#2E7D32"
+                />
               </TouchableOpacity>
             </View>
 
             <Image
-              source={require('@/assets/images/recentscanimage.png')}
+              source={require("@/assets/images/recentscanimage.png")}
               style={styles.recentScanImage}
               resizeMode="cover"
             />
@@ -497,10 +692,16 @@ export default function HomeScreen() {
           </View>
 
           {/* Card 3: Weather Alert */}
-          <View style={[styles.bottomCard, styles.weatherAlertCard, { backgroundColor: '#D3E8E9' }]}>
+          <View
+            style={[
+              styles.bottomCard,
+              styles.weatherAlertCard,
+              { backgroundColor: "#D3E8E9" },
+            ]}
+          >
             <View style={styles.weatherAlertHeader}>
               <Image
-                source={require('@/assets/icons/weatheralerticon.png')}
+                source={require("@/assets/icons/weatheralerticon.png")}
                 style={styles.weatherAlertIcon}
                 resizeMode="contain"
               />
@@ -511,13 +712,19 @@ export default function HomeScreen() {
               Heavy rainfall expected tomorrow.
             </Text>
 
-            <TouchableOpacity style={styles.weatherAlertLink} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.weatherAlertLink}
+              activeOpacity={0.8}
+            >
               <Text style={styles.weatherAlertLinkText}>Stay prepared</Text>
-              <Ionicons name="chevron-forward" size={moderateScale(12)} color="#005B66" />
+              <Ionicons
+                name="chevron-forward"
+                size={moderateScale(12)}
+                color="#005B66"
+              />
             </TouchableOpacity>
           </View>
         </ScrollView>
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -536,21 +743,21 @@ const styles = StyleSheet.create({
 
   // Header Section
   headerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: verticalScale(16),
   },
   headerLeft: {
     flex: 1,
   },
   greetingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   greetingText: {
     fontSize: moderateScale(22),
-    fontWeight: '700',
+    fontWeight: "700",
   },
   seedlingIcon: {
     width: moderateScale(20),
@@ -560,7 +767,7 @@ const styles = StyleSheet.create({
   subtitleText: {
     fontSize: moderateScale(13),
     marginTop: verticalScale(4),
-    fontWeight: '400',
+    fontWeight: "400",
   },
   notificationButton: {
     padding: scale(6),
@@ -568,12 +775,12 @@ const styles = StyleSheet.create({
 
   // Weather Section
   weatherWidget: {
-    flexDirection: 'row',
+    flexDirection: "row",
     borderRadius: moderateScale(16),
     padding: scale(16),
     marginBottom: verticalScale(20),
-    alignItems: 'center',
-    shadowColor: '#000',
+    alignItems: "center",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
@@ -581,16 +788,16 @@ const styles = StyleSheet.create({
   },
   weatherLeft: {
     flex: 1.1,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   weatherLocation: {
     fontSize: moderateScale(12),
-    fontWeight: '600',
+    fontWeight: "600",
     opacity: 0.8,
   },
   tempRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginVertical: verticalScale(6),
   },
   weatherStateIcon: {
@@ -598,29 +805,29 @@ const styles = StyleSheet.create({
   },
   tempText: {
     fontSize: moderateScale(34),
-    fontWeight: '700',
+    fontWeight: "700",
   },
   weatherDesc: {
     fontSize: moderateScale(12),
-    fontWeight: '500',
+    fontWeight: "500",
     marginBottom: verticalScale(10),
   },
   forecastButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
     paddingHorizontal: scale(10),
     paddingVertical: verticalScale(5),
     borderRadius: moderateScale(12),
   },
   forecastButtonText: {
     fontSize: moderateScale(11),
-    fontWeight: '600',
+    fontWeight: "600",
     marginRight: scale(4),
   },
   weatherDivider: {
     width: 1,
-    height: '80%',
+    height: "80%",
     marginHorizontal: scale(12),
   },
   weatherRight: {
@@ -628,66 +835,66 @@ const styles = StyleSheet.create({
     gap: verticalScale(10),
   },
   weatherStatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   weatherStatTextWrapper: {
     marginLeft: scale(8),
   },
   weatherStatLabel: {
     fontSize: moderateScale(10),
-    fontWeight: '400',
+    fontWeight: "400",
   },
   weatherStatValue: {
     fontSize: moderateScale(12),
-    fontWeight: '700',
+    fontWeight: "700",
   },
 
   // Scan Banner Section
   scanBanner: {
     height: verticalScale(165),
     borderRadius: moderateScale(16),
-    backgroundColor: '#094A04',
-    flexDirection: 'row',
-    overflow: 'hidden',
+    backgroundColor: "#094A04",
+    flexDirection: "row",
+    overflow: "hidden",
     marginBottom: verticalScale(20),
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 4,
   },
   scanBannerBg: {
-    position: 'absolute',
+    position: "absolute",
     right: 0,
     top: 0,
     bottom: 0,
-    width: '60%',
-    height: '100%',
+    width: "60%",
+    height: "100%",
   },
   scanBannerBgOverlay: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: 'rgba(9, 74, 4, 0.4)', // Fades leaf into the green color
+    backgroundColor: "rgba(9, 74, 4, 0.4)", // Fades leaf into the green color
   },
   scanLeftContent: {
     flex: 1.2,
     zIndex: 2,
     paddingLeft: scale(16),
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   scanTitle: {
     fontSize: moderateScale(19),
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
     lineHeight: verticalScale(23),
   },
   scanSubtitle: {
     fontSize: moderateScale(11),
-    color: '#E2F5E1',
+    color: "#E2F5E1",
     marginTop: verticalScale(6),
     marginBottom: verticalScale(12),
     paddingRight: scale(10),
@@ -696,42 +903,42 @@ const styles = StyleSheet.create({
     gap: verticalScale(8),
   },
   scanActionButtonSolid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     paddingVertical: verticalScale(6),
     paddingHorizontal: scale(12),
     borderRadius: moderateScale(6),
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   scanActionIcon: {
     marginRight: scale(6),
   },
   scanActionTextSolid: {
-    color: '#094A04',
+    color: "#094A04",
     fontSize: moderateScale(12),
-    fontWeight: '700',
+    fontWeight: "700",
   },
   scanActionButtonOutline: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: "#FFFFFF",
     paddingVertical: verticalScale(5),
     paddingHorizontal: scale(12),
     borderRadius: moderateScale(6),
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   scanActionTextOutline: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: moderateScale(12),
-    fontWeight: '600',
+    fontWeight: "600",
   },
   scanRightOverlay: {
     flex: 0.8,
     zIndex: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   bigCameraIcon: {
     width: moderateScale(80),
@@ -741,15 +948,15 @@ const styles = StyleSheet.create({
 
   // Sections Common Headers
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: verticalScale(12),
     marginTop: verticalScale(8),
   },
   sectionHeaderTitleWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   sectionHeaderIcon: {
     width: moderateScale(16),
@@ -758,17 +965,17 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: moderateScale(16),
-    fontWeight: '700',
+    fontWeight: "700",
   },
   viewAllLink: {
     fontSize: moderateScale(12),
-    fontWeight: '600',
+    fontWeight: "600",
   },
 
   // Farm Health Overview
   overviewCardsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     gap: scale(8),
     marginBottom: verticalScale(20),
   },
@@ -777,22 +984,22 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(12),
     padding: scale(10),
     minHeight: verticalScale(110),
-    justifyContent: 'space-between',
-    shadowColor: '#000',
+    justifyContent: "space-between",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
     shadowRadius: 4,
     elevation: 1,
   },
   overviewCardHeader: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   alertIconBg: {
     width: moderateScale(26),
     height: moderateScale(26),
     borderRadius: moderateScale(13),
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   cropIcon: {
     width: moderateScale(24),
@@ -800,36 +1007,36 @@ const styles = StyleSheet.create({
   },
   cropNameText: {
     fontSize: moderateScale(13),
-    fontWeight: '700',
+    fontWeight: "700",
     marginTop: verticalScale(4),
   },
   cropStatusHealthy: {
     fontSize: moderateScale(12),
-    fontWeight: '700',
-    color: '#2E7D32',
+    fontWeight: "700",
+    color: "#2E7D32",
     marginVertical: verticalScale(2),
   },
   cropStatusWarning: {
     fontSize: moderateScale(11),
-    fontWeight: '700',
-    color: '#E4A11B',
+    fontWeight: "700",
+    color: "#E4A11B",
     marginVertical: verticalScale(2),
   },
   cropStatusAlert: {
     fontSize: moderateScale(12),
-    fontWeight: '700',
-    color: '#C2185B',
+    fontWeight: "700",
+    color: "#C2185B",
     marginVertical: verticalScale(2),
   },
   cropConditionSub: {
     fontSize: moderateScale(10),
-    fontWeight: '400',
+    fontWeight: "400",
   },
 
   // Quick Actions Grid
   quickActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     gap: scale(8),
     marginBottom: verticalScale(20),
   },
@@ -838,9 +1045,9 @@ const styles = StyleSheet.create({
     height: verticalScale(64),
     borderRadius: moderateScale(12),
     borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.02,
     shadowRadius: 2,
@@ -853,7 +1060,7 @@ const styles = StyleSheet.create({
   },
   quickActionText: {
     fontSize: moderateScale(11),
-    fontWeight: '600',
+    fontWeight: "600",
   },
 
   // Bottom Scrollable Section
@@ -868,7 +1075,7 @@ const styles = StyleSheet.create({
   bottomCard: {
     height: verticalScale(140),
     borderRadius: moderateScale(12),
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 5,
@@ -878,18 +1085,18 @@ const styles = StyleSheet.create({
   // Card 1: Daily Tip
   dailyTipCard: {
     width: scale(280),
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    overflow: 'hidden',
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    overflow: "hidden",
   },
   dailyTipLeft: {
     flex: 1.4,
     padding: scale(12),
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: verticalScale(6),
   },
   cardHeaderIcon: {
@@ -897,57 +1104,57 @@ const styles = StyleSheet.create({
   },
   dailyTipHeaderTitle: {
     fontSize: moderateScale(13),
-    fontWeight: '700',
-    color: '#11181C',
+    fontWeight: "700",
+    color: "#11181C",
   },
   dailyTipBody: {
     fontSize: moderateScale(11.5),
-    color: '#4B5563',
+    color: "#4B5563",
     lineHeight: verticalScale(16),
   },
   blendBorder: {
     width: 2,
-    height: '100%',
-    backgroundColor: '#D9D9D9',
+    height: "100%",
+    backgroundColor: "#D9D9D9",
   },
   dailyTipRight: {
     flex: 1,
-    height: '100%',
+    height: "100%",
   },
   dailyTipImage: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
 
   // Card 2: Recent Scan
   recentScanCard: {
     width: scale(210),
     padding: scale(12),
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   recentScanHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   recentScanTitle: {
     fontSize: moderateScale(12),
-    fontWeight: '700',
-    color: '#094A04',
+    fontWeight: "700",
+    color: "#094A04",
   },
   seeAllRecentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   recentScanSeeAll: {
     fontSize: moderateScale(10),
-    color: '#2E7D32',
-    fontWeight: '600',
+    color: "#2E7D32",
+    fontWeight: "600",
     marginRight: scale(2),
   },
   recentScanImage: {
     height: verticalScale(50),
-    width: '100%',
+    width: "100%",
     borderRadius: moderateScale(6),
     marginVertical: verticalScale(4),
   },
@@ -956,28 +1163,28 @@ const styles = StyleSheet.create({
   },
   recentScanDisease: {
     fontSize: moderateScale(12),
-    fontWeight: '700',
-    color: '#11181C',
+    fontWeight: "700",
+    color: "#11181C",
   },
   recentScanConfidence: {
     fontSize: moderateScale(10.5),
-    color: '#2E7D32',
-    fontWeight: '600',
+    color: "#2E7D32",
+    fontWeight: "600",
   },
   recentScanTime: {
     fontSize: moderateScale(9.5),
-    color: '#687076',
+    color: "#687076",
   },
 
   // Card 3: Weather Alert
   weatherAlertCard: {
     width: scale(210),
     padding: scale(12),
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   weatherAlertHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   weatherAlertIcon: {
     width: moderateScale(20),
@@ -986,22 +1193,22 @@ const styles = StyleSheet.create({
   },
   weatherAlertTitle: {
     fontSize: moderateScale(12),
-    fontWeight: '700',
-    color: '#005B66',
+    fontWeight: "700",
+    color: "#005B66",
   },
   weatherAlertText: {
     fontSize: moderateScale(11.5),
-    color: '#1F2937',
+    color: "#1F2937",
     lineHeight: verticalScale(16),
   },
   weatherAlertLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   weatherAlertLinkText: {
     fontSize: moderateScale(11.5),
-    fontWeight: '700',
-    color: '#005B66',
+    fontWeight: "700",
+    color: "#005B66",
     marginRight: scale(4),
   },
 });

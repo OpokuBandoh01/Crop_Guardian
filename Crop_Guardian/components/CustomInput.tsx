@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
-import { View, TextInput, StyleSheet, TouchableOpacity, TextInputProps, Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Ionicons } from "@expo/vector-icons";
+import React, { useState } from "react";
+import {
+  StyleSheet,
+  Text,
+  TextInput,
+  TextInputProps,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
 interface CustomInputProps extends TextInputProps {
   leftIcon?: keyof typeof Ionicons.glyphMap;
@@ -21,9 +28,9 @@ export const CustomInput: React.FC<CustomInputProps> = ({
 }) => {
   // Manage the visibility state for passwords
   const [isPasswordVisible, setIsPasswordVisible] = useState(!isPassword);
-  
+
   // Get current color scheme to apply correct theme colors
-  const colorScheme = useColorScheme() ?? 'light';
+  const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
 
   return (
@@ -32,15 +39,24 @@ export const CustomInput: React.FC<CustomInputProps> = ({
       {label && (
         <Text style={[styles.label, { color: theme.primary }]}>{label}</Text>
       )}
-      
+
       {/* The main input container with borders */}
-      <View style={[styles.container, { borderColor: theme.inputBorder, backgroundColor: theme.surface }]}>
-        
+      <View
+        style={[
+          styles.container,
+          { borderColor: theme.inputBorder, backgroundColor: theme.surface },
+        ]}
+      >
         {/* Optional Left Icon */}
         {leftIcon && (
-          <Ionicons name={leftIcon} size={moderateScale(20)} color={theme.icon} style={styles.leftIcon} />
+          <Ionicons
+            name={leftIcon}
+            size={moderateScale(20)}
+            color={theme.icon}
+            style={styles.leftIcon}
+          />
         )}
-        
+
         {/* The actual text input element */}
         <TextInput
           style={[styles.input, { color: theme.text }]}
@@ -48,12 +64,15 @@ export const CustomInput: React.FC<CustomInputProps> = ({
           secureTextEntry={!isPasswordVisible}
           {...props}
         />
-        
+
         {/* Optional Password Visibility Toggle (Right Icon) */}
         {isPassword && (
-          <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)} style={styles.rightIcon}>
+          <TouchableOpacity
+            onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+            style={styles.rightIcon}
+          >
             <Ionicons
-              name={isPasswordVisible ? 'eye-outline' : 'eye-off-outline'}
+              name={isPasswordVisible ? "eye-outline" : "eye-off-outline"}
               size={moderateScale(20)}
               color={theme.icon}
             />
@@ -71,11 +90,11 @@ const styles = StyleSheet.create({
   label: {
     fontSize: moderateScale(12),
     marginBottom: verticalScale(4),
-    fontWeight: '600',
+    fontWeight: "600",
   },
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
     borderRadius: moderateScale(8),
     paddingHorizontal: scale(12),
@@ -90,6 +109,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: moderateScale(14),
-    height: '100%',
+    height: "100%",
   },
 });

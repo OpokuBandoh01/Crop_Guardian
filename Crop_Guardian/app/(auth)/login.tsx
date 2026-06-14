@@ -31,18 +31,23 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // NEW ADDITION: save authenticated user
   const loginUser = useAuthStore((state) => state.login);
 
   const handleSignIn = async () => {
-    if (!email || !password) {
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedEmail || !trimmedPassword) {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
 
     setIsLoading(true);
     try {
-      const response = await API.post("/api/auth/login", { email, password });
+      const response = await API.post("/api/auth/login", {
+        trimmedEmail,
+        trimmedPassword,
+      });
       const { token } = response.data;
 
       // UPDATED: save auth data in Zustand

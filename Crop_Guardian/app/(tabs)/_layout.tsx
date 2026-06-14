@@ -1,23 +1,30 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { View, StyleSheet, Image, Text } from 'react-native';
-import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
+import { Redirect, Tabs } from "expo-router";
+import React from "react";
+import { Image, StyleSheet, Text, View } from "react-native";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-import { HapticTab } from '@/components/haptic-tab';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { HapticTab } from "@/components/haptic-tab";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useAuthStore } from "@/stores/authStore";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme() ?? 'light';
+  const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
+
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  if (!isAuthenticated) {
+    return <Redirect href="/(auth)/login" />;
+  }
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarButton: HapticTab,
-        tabBarActiveTintColor: '#FFFFFF',
-        tabBarInactiveTintColor: '#A3C89E',
+        tabBarActiveTintColor: "#FFFFFF",
+        tabBarInactiveTintColor: "#A3C89E",
         tabBarLabelStyle: styles.tabLabel,
         tabBarStyle: styles.tabBar,
       }}
@@ -25,10 +32,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: "Home",
           tabBarIcon: ({ color }) => (
             <Image
-              source={require('@/assets/icons/homeicon.png')}
+              source={require("@/assets/icons/homeicon.png")}
               style={[styles.tabIcon, { tintColor: color }]}
               resizeMode="contain"
             />
@@ -41,14 +48,14 @@ export default function TabLayout() {
           ),
         }}
       />
-      
+
       <Tabs.Screen
         name="my-crops"
         options={{
-          title: 'My Crops',
+          title: "My Crops",
           tabBarIcon: ({ color }) => (
             <Image
-              source={require('@/assets/icons/mycropstabicon.png')}
+              source={require("@/assets/icons/mycropstabicon.png")}
               style={[styles.tabIcon, { tintColor: color }]}
               resizeMode="contain"
             />
@@ -65,10 +72,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="alerts"
         options={{
-          title: 'Alerts',
+          title: "Alerts",
           tabBarIcon: ({ color }) => (
             <Image
-              source={require('@/assets/icons/alertstabicon.png')}
+              source={require("@/assets/icons/alertstabicon.png")}
               style={[styles.tabIcon, { tintColor: color }]}
               resizeMode="contain"
             />
@@ -85,10 +92,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: "Profile",
           tabBarIcon: ({ color }) => (
             <Image
-              source={require('@/assets/icons/profileicon.png')}
+              source={require("@/assets/icons/profileicon.png")}
               style={[styles.tabIcon, { tintColor: color }]}
               resizeMode="contain"
             />
@@ -101,7 +108,7 @@ export default function TabLayout() {
           ),
         }}
       />
-      
+
       {/* Hide the default explore screen tab from our customized capsule */}
       <Tabs.Screen
         name="explore"
@@ -115,10 +122,10 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: '#094A04',
+    backgroundColor: "#094A04",
     borderTopWidth: 0,
     height: verticalScale(68),
-    position: 'absolute',
+    position: "absolute",
     bottom: verticalScale(16),
     left: scale(16),
     right: scale(16),
@@ -126,7 +133,7 @@ const styles = StyleSheet.create({
     paddingBottom: verticalScale(8),
     paddingTop: verticalScale(8),
     // Shadow for premium floating look
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
@@ -134,16 +141,16 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     fontSize: moderateScale(10),
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: verticalScale(2),
   },
   labelWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   iconWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   tabIcon: {
     width: moderateScale(22),
@@ -153,8 +160,7 @@ const styles = StyleSheet.create({
     width: moderateScale(4),
     height: moderateScale(4),
     borderRadius: moderateScale(2),
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     marginTop: verticalScale(2),
   },
 });
-

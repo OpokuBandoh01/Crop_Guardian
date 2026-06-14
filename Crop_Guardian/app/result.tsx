@@ -1,35 +1,42 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-import { Colors } from '@/constants/theme';
+// app/result.tsx
+import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React from "react";
+import {
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 export default function ResultScreen() {
   const router = useRouter();
   const { data } = useLocalSearchParams<{ data?: string }>();
-  
+
   let scanResult: any = null;
   if (data) {
     try {
       scanResult = JSON.parse(data);
     } catch (e) {
-      console.error('Error parsing result data:', e);
+      console.error("Error parsing result data:", e);
     }
   }
 
   // Hardcoded colors for this specific dark theme screen
-  const backgroundColor = '#083D04'; // A deep dark green
-  const cardColor = 'rgba(255, 255, 255, 0.1)'; // Translucent overlay for cards
-  const redColor = '#FF4D4D';
-  const brightGreenColor = '#4ADE80';
+  const backgroundColor = "#083D04"; // A deep dark green
+  const cardColor = "rgba(255, 255, 255, 0.1)"; // Translucent overlay for cards
+  const redColor = "#FF4D4D";
+  const brightGreenColor = "#4ADE80";
 
   const formatConfidence = (conf: any) => {
-    if (conf === undefined || conf === null) return '92%';
+    if (conf === undefined || conf === null) return "92%";
     const val = Number(conf);
     if (isNaN(val)) return String(conf);
     if (val <= 1) return `${(val * 100).toFixed(0)}%`;
@@ -39,44 +46,64 @@ export default function ResultScreen() {
   const getActions = () => {
     if (!scanResult) {
       return [
-        'Remove affected leaves',
-        'Apply recommended fungicide',
-        'Ensure good ventilation',
-        'Avoid overhead watering'
+        "Remove affected leaves",
+        "Apply recommended fungicide",
+        "Ensure good ventilation",
+        "Avoid overhead watering",
       ];
     }
     const actions: string[] = [];
-    if (scanResult.organicTreatments) actions.push(`Organic: ${scanResult.organicTreatments}`);
-    if (scanResult.chemicalOptions) actions.push(`Chemical: ${scanResult.chemicalOptions}`);
-    if (scanResult.prevention) actions.push(`Prevention: ${scanResult.prevention}`);
-    return actions.length > 0 ? actions : ['No recommendations provided.'];
+    if (scanResult.organicTreatments)
+      actions.push(`Organic: ${scanResult.organicTreatments}`);
+    if (scanResult.chemicalOptions)
+      actions.push(`Chemical: ${scanResult.chemicalOptions}`);
+    if (scanResult.prevention)
+      actions.push(`Prevention: ${scanResult.prevention}`);
+    return actions.length > 0 ? actions : ["No recommendations provided."];
   };
 
   const handleListen = () => {
     router.push({
-      pathname: '/listening',
+      pathname: "/listening",
       params: {
-        diseaseName: scanResult?.diseaseName || 'Septoria',
-        recommendations: getActions().join(' ')
-      }
+        diseaseName: scanResult?.diseaseName || "Septoria",
+        recommendations: getActions().join(" "),
+      },
     });
   };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor }]}>
-      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-            <Ionicons name="arrow-back-circle-outline" size={moderateScale(32)} color="#FFFFFF" />
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.iconButton}
+          >
+            <Ionicons
+              name="arrow-back-circle-outline"
+              size={moderateScale(32)}
+              color="#FFFFFF"
+            />
           </TouchableOpacity>
           <View style={styles.headerRight}>
             <TouchableOpacity style={styles.circleIconBg}>
-              <Ionicons name="bookmark" size={moderateScale(18)} color="#FFFFFF" />
+              <Ionicons
+                name="bookmark"
+                size={moderateScale(18)}
+                color="#FFFFFF"
+              />
             </TouchableOpacity>
             <TouchableOpacity style={styles.circleIconBg}>
-              <Ionicons name="share-social" size={moderateScale(18)} color="#FFFFFF" />
+              <Ionicons
+                name="share-social"
+                size={moderateScale(18)}
+                color="#FFFFFF"
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -87,25 +114,35 @@ export default function ResultScreen() {
         {/* Disease Info Card */}
         <View style={[styles.card, { backgroundColor: cardColor }]}>
           {scanResult?.imageUrl ? (
-            <Image 
-              source={{ uri: scanResult.imageUrl }} 
+            <Image
+              source={{ uri: scanResult.imageUrl }}
               style={styles.diseaseImage}
               contentFit="cover"
             />
           ) : (
-            <Image 
-              source={require('@/assets/images/septorialeaf.png')} 
+            <Image
+              source={require("@/assets/images/septorialeaf.png")}
               style={styles.diseaseImage}
               contentFit="cover"
             />
           )}
           <View style={styles.diseaseInfo}>
-            <Text style={[styles.alertText, { color: redColor }]}>Disease Detected</Text>
-            <Text style={styles.diseaseName}>{scanResult?.diseaseName || 'Septoria'}</Text>
-            <Text style={styles.diseaseSubtitle}>{scanResult?.detectedCrop ? `On ${scanResult.detectedCrop}` : 'A leaf spot fungus'}</Text>
+            <Text style={[styles.alertText, { color: redColor }]}>
+              Disease Detected
+            </Text>
+            <Text style={styles.diseaseName}>
+              {scanResult?.diseaseName || "Septoria"}
+            </Text>
+            <Text style={styles.diseaseSubtitle}>
+              {scanResult?.detectedCrop
+                ? `On ${scanResult.detectedCrop}`
+                : "A leaf spot fungus"}
+            </Text>
             <View style={styles.confidenceRow}>
               <Text style={styles.confidenceLabel}>Confidence: </Text>
-              <Text style={[styles.confidenceValue, { color: brightGreenColor }]}>
+              <Text
+                style={[styles.confidenceValue, { color: brightGreenColor }]}
+              >
                 {formatConfidence(scanResult?.confidence)}
               </Text>
             </View>
@@ -113,20 +150,40 @@ export default function ResultScreen() {
         </View>
 
         {/* Description Card */}
-        <View style={[styles.card, { backgroundColor: cardColor, flexDirection: 'column' }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: cardColor, flexDirection: "column" },
+          ]}
+        >
           <Text style={styles.cardTitle}>Description</Text>
           <Text style={styles.cardText}>
-            {scanResult?.symptoms || scanResult?.causes || 'Septoria, commonly known as a leaf spot is a species of fungus that infects vegetables, trees and ornamental plants. In some cases damage is insignificant, in others there\'s no hope.'}
+            {scanResult?.symptoms ||
+              scanResult?.causes ||
+              "Septoria, commonly known as a leaf spot is a species of fungus that infects vegetables, trees and ornamental plants. In some cases damage is insignificant, in others there's no hope."}
           </Text>
         </View>
 
         {/* Recommended Actions Card */}
-        <View style={[styles.card, { backgroundColor: cardColor, flexDirection: 'column', marginBottom: verticalScale(30) }]}>
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: cardColor,
+              flexDirection: "column",
+              marginBottom: verticalScale(30),
+            },
+          ]}
+        >
           <Text style={styles.cardTitle}>Recommended Actions</Text>
-          
+
           {getActions().map((action, index) => (
             <View key={index} style={styles.actionItem}>
-              <Ionicons name="checkmark" size={moderateScale(20)} color="#FFFFFF" />
+              <Ionicons
+                name="checkmark"
+                size={moderateScale(20)}
+                color="#FFFFFF"
+              />
               <Text style={styles.actionText}>{action}</Text>
             </View>
           ))}
@@ -138,15 +195,19 @@ export default function ResultScreen() {
             <Text style={styles.primaryButtonText}>View Details</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.secondaryButton}
             onPress={handleListen}
           >
-            <Ionicons name="volume-medium" size={moderateScale(20)} color="#FFFFFF" style={styles.buttonIcon} />
+            <Ionicons
+              name="volume-medium"
+              size={moderateScale(20)}
+              color="#FFFFFF"
+              style={styles.buttonIcon}
+            />
             <Text style={styles.secondaryButtonText}>Listen(Twi)</Text>
           </TouchableOpacity>
         </View>
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -161,9 +222,9 @@ const styles = StyleSheet.create({
     paddingBottom: verticalScale(30),
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingTop: verticalScale(10),
     paddingBottom: verticalScale(10),
   },
@@ -171,30 +232,30 @@ const styles = StyleSheet.create({
     padding: scale(4),
   },
   headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: scale(12),
   },
   circleIconBg: {
     width: moderateScale(36),
     height: moderateScale(36),
     borderRadius: moderateScale(18),
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   mainTitle: {
     fontSize: moderateScale(28),
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textAlign: 'center',
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "center",
     marginBottom: verticalScale(20),
   },
   card: {
     borderRadius: moderateScale(12),
     padding: moderateScale(16),
     marginBottom: verticalScale(16),
-    flexDirection: 'row',
+    flexDirection: "row",
   },
   diseaseImage: {
     width: moderateScale(100),
@@ -204,55 +265,55 @@ const styles = StyleSheet.create({
   diseaseInfo: {
     flex: 1,
     marginLeft: scale(16),
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   alertText: {
     fontSize: moderateScale(13),
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: verticalScale(4),
   },
   diseaseName: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: moderateScale(20),
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: verticalScale(2),
   },
   diseaseSubtitle: {
-    color: '#E5E7EB',
+    color: "#E5E7EB",
     fontSize: moderateScale(14),
     marginBottom: verticalScale(10),
   },
   confidenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   confidenceLabel: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: moderateScale(13),
-    fontWeight: '600',
+    fontWeight: "600",
   },
   confidenceValue: {
     fontSize: moderateScale(13),
-    fontWeight: '700',
+    fontWeight: "700",
   },
   cardTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: moderateScale(16),
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: verticalScale(12),
   },
   cardText: {
-    color: '#E5E7EB',
+    color: "#E5E7EB",
     fontSize: moderateScale(14),
     lineHeight: moderateScale(22),
   },
   actionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: verticalScale(12),
   },
   actionText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: moderateScale(14),
     marginLeft: scale(12),
   },
@@ -260,30 +321,30 @@ const styles = StyleSheet.create({
     gap: verticalScale(16),
   },
   primaryButton: {
-    backgroundColor: '#FFFFE7', // Cream color from theme background
+    backgroundColor: "#FFFFE7", // Cream color from theme background
     borderRadius: moderateScale(30),
     paddingVertical: verticalScale(14),
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   primaryButtonText: {
-    color: '#094A04',
+    color: "#094A04",
     fontSize: moderateScale(16),
-    fontWeight: '700',
+    fontWeight: "700",
   },
   secondaryButton: {
-    flexDirection: 'row',
+    flexDirection: "row",
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: "#FFFFFF",
     borderRadius: moderateScale(30),
     paddingVertical: verticalScale(14),
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   secondaryButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: moderateScale(16),
-    fontWeight: '700',
+    fontWeight: "700",
   },
   buttonIcon: {
     marginRight: scale(8),

@@ -20,10 +20,10 @@ export default function IndexScreen() {
     if (!onboardingHydrated || !authHydrated) return;
 
     let destination: string;
-    if (!hasOnboarded) {
-      destination = "/(onboarding)/user-role";
-    } else if (isAuthenticated) {
+    if (isAuthenticated) {
       destination = "/(tabs)";
+    } else if (!hasOnboarded) {
+      destination = "/(onboarding)/user-role";
     } else {
       destination = "/(auth)/login";
     }

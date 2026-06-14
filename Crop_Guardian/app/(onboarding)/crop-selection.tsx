@@ -100,7 +100,7 @@ export default function CropSelectionScreen() {
       style={[styles.safeArea, { backgroundColor: theme.background }]}
     >
       <View style={styles.headerWrapper}>
-        <AuthHeader />
+        <AuthHeader showBackButton={false} showLoginLink={true} />
       </View>
 
       <ScrollView

@@ -1,4 +1,5 @@
 // app/(onboarding)/crop-details
+// this file is no longer relevant. ignore it
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
@@ -88,7 +89,7 @@ export default function CropDetailsScreen() {
       style={[styles.safeArea, { backgroundColor: theme.background }]}
     >
       <View style={styles.headerWrapper}>
-        <AuthHeader />
+        <AuthHeader showBackButton={false} showLoginLink={true} />
       </View>
 
       <ScrollView

@@ -77,13 +77,6 @@ export default function ReviewSelectionScreen() {
         {/* Authentication entry point */}
         <View style={styles.authActions}>
           <TouchableOpacity
-            style={styles.loginButton}
-            onPress={() => router.push("/(auth)/login")}
-          >
-            <Text style={styles.loginButtonText}>Login</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
             style={styles.signupButton}
             onPress={() => router.push("/(auth)/signup")}
           >

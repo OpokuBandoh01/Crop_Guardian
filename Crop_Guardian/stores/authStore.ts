@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { useOnboardingStore } from "./onboardingStore";
 
 interface User {
   id?: string;
@@ -22,18 +23,18 @@ interface AuthStore {
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set) => ({
-      // NEW ADDITION: auth token
+      // auth token
       token: null,
 
-      // NEW ADDITION: logged in user
+      // logged in user
       user: null,
 
-      // NEW ADDITION: auth status
+      // auth status
       isAuthenticated: false,
 
       hasHydrated: false,
 
-      // NEW ADDITION: login handler
+      // login handler
       login: (token, user) =>
         set({
           token,
@@ -41,10 +42,11 @@ export const useAuthStore = create<AuthStore>()(
           isAuthenticated: true,
         }),
 
-      // NEW ADDITION: logout handler
+      // logout handler
       logout: () => {
         AsyncStorage.removeItem("userToken").catch(() => {});
         AsyncStorage.removeItem("userData").catch(() => {});
+        useOnboardingStore.getState().resetOnboarding();
         set({
           token: null,
           user: null,
@@ -58,10 +60,10 @@ export const useAuthStore = create<AuthStore>()(
         }),
     }),
     {
-      // NEW ADDITION: persist auth state
+      // persist auth state
       name: "auth-storage",
 
-      // NEW ADDITION: persist using AsyncStorage
+      // persist using AsyncStorage
       storage: createJSONStorage(() => AsyncStorage),
 
       onRehydrateStorage: () => (state) => {

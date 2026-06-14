@@ -32,36 +32,36 @@ interface OnboardingStore {
 export const useOnboardingStore = create<OnboardingStore>()(
   persist(
     (set) => ({
-      // NEW ADDITION: selected role state
+      //  selected role state
       selectedRole: "",
 
-      // NEW ADDITION: selected crops state
+      //  selected crops state
       selectedCrops: [],
 
-      // NEW ADDITION: onboarding completion flag
+      //  onboarding completion flag
       hasOnboarded: false,
 
       hasHydrated: false,
 
-      // NEW ADDITION: update role
+      //  update role
       setRole: (role) =>
         set({
           selectedRole: role,
         }),
 
-      // NEW ADDITION: update crops
+      //  update crops
       setCrops: (crops) =>
         set({
           selectedCrops: crops,
         }),
 
-      // NEW ADDITION: mark onboarding completed
+      //  mark onboarding completed
       completeOnboarding: () =>
         set({
           hasOnboarded: true,
         }),
 
-      // NEW ADDITION: reset onboarding state
+      //  reset onboarding state
       resetOnboarding: () =>
         set({
           selectedRole: "",
@@ -75,10 +75,10 @@ export const useOnboardingStore = create<OnboardingStore>()(
         }),
     }),
     {
-      // NEW ADDITION: persist onboarding state
+      //  persist onboarding state
       name: "onboarding-storage",
 
-      // NEW ADDITION: use AsyncStorage under the hood
+      //  use AsyncStorage under the hood
       storage: createJSONStorage(() => AsyncStorage),
 
       onRehydrateStorage: () => (state) => {

@@ -37,17 +37,14 @@ export default function LoginScreen() {
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
 
-    if (!trimmedEmail || !trimmedPassword) {
+    if (!email || !password) {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
 
     setIsLoading(true);
     try {
-      const response = await API.post("/api/auth/login", {
-        trimmedEmail,
-        trimmedPassword,
-      });
+      const response = await API.post("/api/auth/login", { email, password });
       const { token } = response.data;
 
       // UPDATED: save auth data in Zustand
@@ -152,7 +149,7 @@ export default function LoginScreen() {
           <Text style={[styles.footerText, { color: theme.icon }]}>
             {"Don't have an account? "}
           </Text>
-          <Link href="/signup" asChild>
+          <Link href="/(onboarding)/user-role" asChild>
             <TouchableOpacity>
               <Text style={[styles.footerLink, { color: theme.primary }]}>
                 Sign up!

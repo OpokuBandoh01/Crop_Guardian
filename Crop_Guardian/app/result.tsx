@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react"; // UPDATED: Hooks for TTS
+import React, { useEffect, useRef, useState } from "react"; //  Hooks for TTS
 import {
   ActivityIndicator,
   ScrollView,
@@ -13,9 +13,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-// NEW ADDITION: Modern expo-audio + status hook
-import API from "@/services/api"; // UPDATED: For proxy call
-import { useAuthStore } from "@/stores/authStore"; // UPDATED: Language check
+//  Modern expo-audio + status hook
+import API from "@/services/api"; //  For proxy call
+import { useAuthStore } from "@/stores/authStore"; //  Language check
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 
 export default function ResultScreen() {
@@ -23,6 +23,9 @@ export default function ResultScreen() {
   const { data } = useLocalSearchParams<{ data?: string }>();
 
   const user = useAuthStore((state) => state.user);
+  const refreshUser = useAuthStore((state) => state.refreshUser);
+
+  console.log("language", user?.language);
 
   let scanResult: any = null;
   if (data) {
@@ -46,10 +49,14 @@ export default function ResultScreen() {
   const isMounted = useRef(true);
 
   useEffect(() => {
+    refreshUser();
+  }, [refreshUser]);
+
+  useEffect(() => {
     setIsPlaying(status.playing || false);
   }, [status.playing]);
 
-  // // NEW ADDITION: Cleanup
+  // //  Cleanup
   // useEffect(() => {
   //   return () => {
   //     player.pause();
@@ -104,7 +111,7 @@ export default function ResultScreen() {
     });
   };
 
-  // NEW ADDITION: Secure Proxy TTS (recommended)
+  //  Secure Proxy TTS (recommended)
   const toggleTts = async () => {
     if (
       !scanResult
@@ -235,24 +242,23 @@ export default function ResultScreen() {
         >
           <View style={styles.cardTitleRow}>
             <Text style={styles.cardTitle}>Description</Text>
-            {user?.language === "tw" ||
-              (user?.language === "en" && (
-                <TouchableOpacity
-                  onPress={toggleTts}
-                  disabled={isTtsLoading}
-                  style={styles.ttsButton}
-                >
-                  {isTtsLoading ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Ionicons
-                      name={isPlaying ? "pause-circle" : "volume-medium"}
-                      size={moderateScale(24)}
-                      color="#FFFFFF"
-                    />
-                  )}
-                </TouchableOpacity>
-              ))}
+            {user?.language === "tw" && (
+              <TouchableOpacity
+                onPress={toggleTts}
+                disabled={isTtsLoading}
+                style={styles.ttsButton}
+              >
+                {isTtsLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons
+                    name={isPlaying ? "pause-circle" : "volume-medium"}
+                    size={moderateScale(24)}
+                    color="#FFFFFF"
+                  />
+                )}
+              </TouchableOpacity>
+            )}
           </View>
 
           <Text style={styles.cardText}>
@@ -435,7 +441,7 @@ const styles = StyleSheet.create({
   },
   buttonIcon: { marginRight: scale(8) },
 
-  // NEW ADDITION: TTS styles
+  //  TTS styles
   cardTitleRow: {
     flexDirection: "row",
     justifyContent: "space-between",

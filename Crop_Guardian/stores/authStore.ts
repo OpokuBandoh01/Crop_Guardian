@@ -1,4 +1,5 @@
 // stores/authStore.ts
+import API from "@/services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -21,11 +22,12 @@ interface AuthStore {
   logout: () => void;
   setHasHydrated: (state: boolean) => void;
   updateUser: (updatedUser: Partial<User>) => void;
+  refreshUser: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // auth token
       token: null,
 
@@ -65,6 +67,28 @@ export const useAuthStore = create<AuthStore>()(
         set((state) => ({
           user: state.user ? { ...state.user, ...updatedUser } : updatedUser,
         })),
+      refreshUser: async () => {
+        const { token } = get();
+        if (!token) return;
+
+        try {
+          // Secure API call - uses existing interceptor
+          const response = await API.get("/api/auth/me"); // Assuming you have this endpoint
+          if (response.data?.user) {
+            set({ user: response.data.user });
+            console.log(
+              "✅ User refreshed - new language:",
+              response.data.user.language,
+            );
+          }
+        } catch (error) {
+          console.error("❌ Failed to refresh user:", error);
+          // Optional: logout on auth error
+          if ((error as any)?.response?.status === 401) {
+            get().logout();
+          }
+        }
+      },
     }),
     {
       // persist auth state

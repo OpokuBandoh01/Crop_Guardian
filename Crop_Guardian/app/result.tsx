@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react"; // UPDATED: Hooks for TTS
+import React, { useEffect, useRef, useState } from "react"; // UPDATED: Hooks for TTS
 import {
   ActivityIndicator,
   ScrollView,
@@ -38,22 +38,32 @@ export default function ResultScreen() {
   const redColor = "#FF4D4D";
   const brightGreenColor = "#4ADE80";
 
-  // NEW ADDITION: TTS States
   const [isTtsLoading, setIsTtsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const player = useAudioPlayer();
-  const status = useAudioPlayerStatus(player); // NEW ADDITION: Better status tracking
+  const status = useAudioPlayerStatus(player);
+  const isMounted = useRef(true);
 
-  // NEW ADDITION: Sync isPlaying with status
   useEffect(() => {
     setIsPlaying(status.playing || false);
   }, [status.playing]);
 
-  // NEW ADDITION: Cleanup
+  // // NEW ADDITION: Cleanup
+  // useEffect(() => {
+  //   return () => {
+  //     player.pause();
+  //   };
+  // }, [player]);
+
   useEffect(() => {
     return () => {
-      player.pause();
+      isMounted.current = false;
+      try {
+        player.pause();
+      } catch (e) {
+        console.log("Audio cleanup completed (expected on unmount)");
+      }
     };
   }, [player]);
 
@@ -119,7 +129,11 @@ export default function ResultScreen() {
         language: "tw",
       });
 
-      if (response.data.success && response.data.audioBase64) {
+      if (
+        response.data.success &&
+        response.data.audioBase64 &&
+        isMounted.current
+      ) {
         const audioUri = `data:audio/wav;base64,${response.data.audioBase64}`;
         player.replace(audioUri);
         await player.play();
@@ -129,7 +143,9 @@ export default function ResultScreen() {
     } catch (error) {
       console.error("TTS Error:", error);
     } finally {
-      setIsTtsLoading(false);
+      if (isMounted.current) {
+        setIsTtsLoading(false);
+      }
     }
   };
 

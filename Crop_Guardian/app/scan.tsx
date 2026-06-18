@@ -510,7 +510,11 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(30),
     padding: moderateScale(8),
   },
-  controlIcon: { width: moderateScale(28), height: moderateScale(28) },
+  controlIcon: {
+    width: moderateScale(28),
+    height: moderateScale(28),
+    alignItems: "center",
+  },
 
   // UPDATED: Big Diagnose button
   diagnoseButton: {

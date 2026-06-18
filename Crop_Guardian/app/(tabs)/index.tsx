@@ -1,10 +1,9 @@
+// app/(tabs)/index.tsx
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Location from "expo-location";
 import { useNavigation, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  Dimensions,
   Image,
   ScrollView,
   StyleSheet,
@@ -19,7 +18,7 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import API from "@/services/api";
 
-const { width } = Dimensions.get("window");
+import WeatherWidget from "@/components/WeatherWidget";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -28,7 +27,6 @@ export default function HomeScreen() {
   const theme = Colors[colorScheme];
 
   const [userData, setUserData] = useState<any>(null);
-  const [weatherData, setWeatherData] = useState<any>(null);
   const [myCrops, setMyCrops] = useState<any[]>([]);
   const [cropStages, setCropStages] = useState<Record<string, string>>({});
 
@@ -47,23 +45,6 @@ export default function HomeScreen() {
           setUserData(JSON.parse(cached));
         } catch {}
       }
-    }
-  };
-
-  const fetchWeather = async () => {
-    try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      let params = {};
-      if (status === "granted") {
-        const loc = await Location.getCurrentPositionAsync({});
-        params = { lat: loc.coords.latitude, lon: loc.coords.longitude };
-      }
-      const res = await API.get("/api/weather/forecast", { params });
-      if (res.data?.success && res.data.data) {
-        setWeatherData(res.data.data);
-      }
-    } catch (err) {
-      console.error("Error fetching weather:", err);
     }
   };
 
@@ -101,7 +82,6 @@ export default function HomeScreen() {
 
   useEffect(() => {
     fetchUser();
-    fetchWeather();
     fetchMyCrops();
 
     const unsubscribe = navigation.addListener("focus", () => {
@@ -122,6 +102,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ================= HEADER SECTION ================= */}
+
         <View style={styles.headerContainer}>
           <View style={styles.headerLeft}>
             <View style={styles.greetingRow}>
@@ -155,144 +136,18 @@ export default function HomeScreen() {
         </View>
 
         {/* ================= WEATHER SECTION ================= */}
-        <View
-          style={[
-            styles.weatherWidget,
-            {
-              backgroundColor: colorScheme === "light" ? "#EBF7E9" : "#1E2C20",
-            },
-          ]}
-        >
-          <View style={styles.weatherLeft}>
-            <Text style={[styles.weatherLocation, { color: theme.text }]}>
-              Kumasi, Ashanti
-            </Text>
 
-            <View style={styles.tempRow}>
-              <Ionicons
-                name="rainy-outline"
-                size={moderateScale(38)}
-                color={theme.primary}
-                style={styles.weatherStateIcon}
-              />
-              <Text style={[styles.tempText, { color: theme.text }]}>
-                {weatherData?.current?.temp
-                  ? `${weatherData.current.temp.toFixed(0)}°C`
-                  : "28°C"}
-              </Text>
-            </View>
-
-            <Text style={[styles.weatherDesc, { color: theme.text }]}>
-              {weatherData?.overallSummary || "Light rain expected at 4PM"}
-            </Text>
-
-            <TouchableOpacity
-              style={[
-                styles.forecastButton,
-                {
-                  backgroundColor:
-                    colorScheme === "light" ? "#C8E6C9" : "#2E3D30",
-                },
-              ]}
-              activeOpacity={0.8}
-              onPress={() => router.push("/weather")}
-            >
-              <Text
-                style={[styles.forecastButtonText, { color: theme.primary }]}
-              >
-                View full forecast
-              </Text>
-              <Ionicons
-                name="chevron-forward"
-                size={moderateScale(12)}
-                color={theme.primary}
-              />
-            </TouchableOpacity>
-          </View>
-
-          {/* Vertical divider line */}
-          <View
-            style={[
-              styles.weatherDivider,
-              {
-                backgroundColor:
-                  colorScheme === "light" ? "#D0E9CD" : "#2E3D30",
-              },
-            ]}
-          />
-
-          <View style={styles.weatherRight}>
-            {/* Humidity */}
-            <View style={styles.weatherStatItem}>
-              <Ionicons
-                name="water-outline"
-                size={moderateScale(18)}
-                color={theme.primary}
-              />
-              <View style={styles.weatherStatTextWrapper}>
-                <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>
-                  Humidity
-                </Text>
-                <Text style={[styles.weatherStatValue, { color: theme.text }]}>
-                  {weatherData?.current?.humidity
-                    ? `${weatherData.current.humidity}%`
-                    : "70%"}
-                </Text>
-              </View>
-            </View>
-
-            {/* Wind */}
-            <View style={styles.weatherStatItem}>
-              <Ionicons
-                name="leaf-outline"
-                size={moderateScale(18)}
-                color={theme.primary}
-              />
-              <View style={styles.weatherStatTextWrapper}>
-                <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>
-                  Wind
-                </Text>
-                <Text style={[styles.weatherStatValue, { color: theme.text }]}>
-                  {weatherData?.current?.windSpeed
-                    ? `${weatherData.current.windSpeed} km/h`
-                    : "Moderate"}
-                </Text>
-              </View>
-            </View>
-
-            {/* Feels like */}
-            <View style={styles.weatherStatItem}>
-              <Ionicons
-                name="thermometer-outline"
-                size={moderateScale(18)}
-                color={theme.primary}
-              />
-              <View style={styles.weatherStatTextWrapper}>
-                <Text style={[styles.weatherStatLabel, { color: theme.icon }]}>
-                  Feels like
-                </Text>
-                <Text style={[styles.weatherStatValue, { color: theme.text }]}>
-                  {weatherData?.current?.feelsLike
-                    ? `${weatherData.current.feelsLike.toFixed(0)}°C`
-                    : "30°C"}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
+        <WeatherWidget />
 
         {/* ================= DISEASE SCAN BANNER ================= */}
         <View style={styles.scanBanner}>
-          {/* Background image on the right */}
           <Image
             source={require("@/assets/images/leafimage.png")}
             style={styles.scanBannerBg}
             resizeMode="cover"
           />
-          {/* Subtle gradient overlay using dark green transparency */}
           <View style={styles.scanBannerBgOverlay} />
 
-          {/* Left Contents */}
           <View style={styles.scanLeftContent}>
             <Text style={styles.scanTitle}>
               Scan Your Crop{"\n"}for Diseases
@@ -301,7 +156,6 @@ export default function HomeScreen() {
               Get instant AI diagnosis and recommended solutions
             </Text>
 
-            {/* Quick scanning triggers */}
             <View style={styles.scanActionContainer}>
               <TouchableOpacity
                 style={styles.scanActionButtonSolid}
@@ -333,7 +187,6 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Right Camera Overlay */}
           <View style={styles.scanRightOverlay}>
             <Image
               source={require("@/assets/icons/bigcameraicon.png")}
@@ -344,6 +197,7 @@ export default function HomeScreen() {
         </View>
 
         {/* ================= FARM HEALTH OVERVIEW ================= */}
+
         <View style={styles.sectionHeader}>
           <View style={styles.sectionHeaderTitleWrapper}>
             <Image
@@ -365,14 +219,13 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Horizontal cards layout for crop statuses */}
         <View style={styles.overviewCardsRow}>
           {myCrops.length > 0 ? (
             myCrops.slice(0, 2).map((cropItem, idx) => {
               const cropName = cropItem.cropType.toLowerCase();
               const formattedName =
                 cropName.charAt(0).toUpperCase() + cropName.slice(1);
-              const isWarning = idx === 1; // variance for rich presentation
+              const isWarning = idx === 1;
 
               let cropIcon = require("@/assets/icons/maizeicon.png");
               if (cropName === "cassava")
@@ -441,7 +294,6 @@ export default function HomeScreen() {
             })
           ) : (
             <>
-              {/* Maize Card */}
               <View
                 style={[
                   styles.overviewCard,
@@ -467,7 +319,6 @@ export default function HomeScreen() {
                 </Text>
               </View>
 
-              {/* Cassava Card */}
               <View
                 style={[
                   styles.overviewCard,
@@ -495,7 +346,6 @@ export default function HomeScreen() {
             </>
           )}
 
-          {/* Alerts Card */}
           <View style={[styles.overviewCard, { backgroundColor: "#FEE5F5" }]}>
             <View style={styles.overviewCardHeader}>
               <View
@@ -519,6 +369,7 @@ export default function HomeScreen() {
         </View>
 
         {/* ================= QUICK ACTIONS ================= */}
+
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>
             Quick Actions
@@ -531,7 +382,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Quick action grid items */}
         <View style={styles.quickActionsRow}>
           <TouchableOpacity
             style={[
@@ -618,7 +468,7 @@ export default function HomeScreen() {
         </View>
 
         {/* ================= HORIZONTAL SCROLLABLE SECTION ================= */}
-        {/* Scrollable list at bottom for Daily Tip, Recent Scan, Weather Alert */}
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -627,7 +477,6 @@ export default function HomeScreen() {
         >
           {/* Card 1: Daily Tip */}
           <View style={[styles.bottomCard, styles.dailyTipCard]}>
-            {/* Split layout inside */}
             <View style={styles.dailyTipLeft}>
               <View style={styles.cardHeaderRow}>
                 <Ionicons
@@ -643,7 +492,6 @@ export default function HomeScreen() {
               </Text>
             </View>
 
-            {/* D9D9D9 Blend separator */}
             <View style={styles.blendBorder} />
 
             <View style={styles.dailyTipRight}>
@@ -737,7 +585,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: scale(16),
     paddingTop: verticalScale(12),
-    // Padding bottom at 95 to account for floating bottom navigation capsule
     paddingBottom: verticalScale(100),
   },
 
@@ -773,84 +620,6 @@ const styles = StyleSheet.create({
     padding: scale(6),
   },
 
-  // Weather Section
-  weatherWidget: {
-    flexDirection: "row",
-    borderRadius: moderateScale(16),
-    padding: scale(16),
-    marginBottom: verticalScale(20),
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  weatherLeft: {
-    flex: 1.1,
-    justifyContent: "center",
-  },
-  weatherLocation: {
-    fontSize: moderateScale(12),
-    fontWeight: "600",
-    opacity: 0.8,
-  },
-  tempRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: verticalScale(6),
-  },
-  weatherStateIcon: {
-    marginRight: scale(8),
-  },
-  tempText: {
-    fontSize: moderateScale(34),
-    fontWeight: "700",
-  },
-  weatherDesc: {
-    fontSize: moderateScale(12),
-    fontWeight: "500",
-    marginBottom: verticalScale(10),
-  },
-  forecastButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    paddingHorizontal: scale(10),
-    paddingVertical: verticalScale(5),
-    borderRadius: moderateScale(12),
-  },
-  forecastButtonText: {
-    fontSize: moderateScale(11),
-    fontWeight: "600",
-    marginRight: scale(4),
-  },
-  weatherDivider: {
-    width: 1,
-    height: "80%",
-    marginHorizontal: scale(12),
-  },
-  weatherRight: {
-    flex: 0.9,
-    gap: verticalScale(10),
-  },
-  weatherStatItem: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  weatherStatTextWrapper: {
-    marginLeft: scale(8),
-  },
-  weatherStatLabel: {
-    fontSize: moderateScale(10),
-    fontWeight: "400",
-  },
-  weatherStatValue: {
-    fontSize: moderateScale(12),
-    fontWeight: "700",
-  },
-
-  // Scan Banner Section
   scanBanner: {
     height: verticalScale(165),
     borderRadius: moderateScale(16),
@@ -878,7 +647,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: "rgba(9, 74, 4, 0.4)", // Fades leaf into the green color
+    backgroundColor: "rgba(9, 74, 4, 0.4)",
   },
   scanLeftContent: {
     flex: 1.2,
@@ -946,7 +715,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
 
-  // Sections Common Headers
+  // Section Headers
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1033,7 +802,7 @@ const styles = StyleSheet.create({
     fontWeight: "400",
   },
 
-  // Quick Actions Grid
+  // Quick Actions
   quickActionsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1065,7 +834,7 @@ const styles = StyleSheet.create({
 
   // Bottom Scrollable Section
   horizontalScrollView: {
-    marginHorizontal: scale(-16), // Stretch back to full width for seamless scrolling
+    marginHorizontal: scale(-16),
   },
   horizontalScrollContent: {
     paddingHorizontal: scale(16),

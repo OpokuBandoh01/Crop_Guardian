@@ -2,6 +2,7 @@
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import API from "@/services/api";
+import { getLocationName } from "@/utils/utilities";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
@@ -9,52 +10,7 @@ import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-// NEW ADDITION: Reusable function for reverse geocoding (can be moved to @/utils/location.ts)
-export const getLocationName = async (
-  latitude: number,
-  longitude: number,
-): Promise<string> => {
-  try {
-    const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
-    if (geocode.length > 0) {
-      const { city, region, country } = geocode[0];
-      return (
-        [city, region].filter(Boolean).join(", ") ||
-        country ||
-        "Unknown Location"
-      );
-    }
-    return "Unknown Location";
-  } catch (error) {
-    console.error("Reverse geocoding failed:", error);
-    return "Unknown Location";
-  }
-};
-
-// NEW ADDITION: Weather code to description map (from your backend)
-const weatherCodeMap: Record<number, string> = {
-  0: "Clear Sky",
-  1: "Mainly Clear",
-  2: "Partly Cloudy",
-  3: "Overcast",
-  45: "Fog",
-  48: "Depositing Rime Fog",
-  51: "Light Drizzle",
-  53: "Moderate Drizzle",
-  55: "Dense Drizzle",
-  61: "Slight Rain",
-  63: "Moderate Rain",
-  65: "Heavy Rain",
-  71: "Slight Snow Fall",
-  73: "Moderate Snow Fall",
-  75: "Heavy Snow Fall",
-  80: "Slight Rain Showers",
-  81: "Moderate Rain Showers",
-  82: "Violent Rain Showers",
-  // NO CHANGES: Extend this map easily when backend adds more codes
-};
-
-// NEW ADDITION: Map weather code → Ionicons name
+// Map weather code → Ionicons name
 const getWeatherIcon = (code: number): string => {
   if ([0, 1].includes(code)) return "sunny-outline";
   if ([2, 3].includes(code)) return "partly-sunny-outline";
@@ -65,7 +21,7 @@ const getWeatherIcon = (code: number): string => {
   return "cloud-outline"; // fallback
 };
 
-// UPDATED: Full backend shape (only fields that exist)
+//  Full backend shape (only fields that exist)
 interface BackendCurrent {
   time: string;
   interval: number;
@@ -83,11 +39,12 @@ interface WeatherData {
   // daily, riskInsights, location are available but not used in this widget
 }
 
+//  Added weatherDescription field
 interface DisplayWeather {
   temp: number;
   humidity: number;
   feelsLike: number;
-  description: string;
+  description: string; //  weatherDescription from current
   icon: string;
   locationName: string;
   overallSummary: string;
@@ -101,7 +58,6 @@ export default function WeatherWidget() {
   const [weatherData, setWeatherData] = useState<DisplayWeather | null>(null);
   const [loading, setLoading] = useState(true);
   const [permissionDenied, setPermissionDenied] = useState(false);
-  // NO CHANGES: (kept router and theme logic)
 
   const fetchWeather = async () => {
     try {
@@ -135,7 +91,7 @@ export default function WeatherWidget() {
           temp: current.temperature_2m,
           humidity: current.relative_humidity_2m,
           feelsLike: current.apparent_temperature,
-          description: current.weatherDescription,
+          description: current.weatherDescription, //  weather code summary
           icon: getWeatherIcon(current.weather_code),
           locationName,
           overallSummary: res.data.data.overallSummary,
@@ -149,13 +105,12 @@ export default function WeatherWidget() {
     }
   };
 
-  // UPDATED: Re-fetch when permission changes
   useEffect(() => {
     fetchWeather();
   }, []);
 
   const handleGrantPermission = () => {
-    fetchWeather(); // NEW ADDITION: Re-fetch after user grants permission
+    fetchWeather();
   };
 
   if (permissionDenied) {
@@ -212,20 +167,17 @@ export default function WeatherWidget() {
     >
       {/* LEFT SIDE — location, temperature, description, forecast button */}
       <View style={styles.weatherLeft}>
-        {/* UPDATED: Dynamic location from reverse geocoding */}
         <Text style={[styles.weatherLocation, { color: theme.text }]}>
           {weatherData?.locationName || "Detecting location..."}
         </Text>
 
         <View style={styles.tempRow}>
-          {/* UPDATED: Dynamic icon based on weather code */}
           <Ionicons
             name={(weatherData?.icon as any) || "cloud-outline"}
             size={moderateScale(38)}
             color={theme.primary}
             style={styles.weatherStateIcon}
           />
-          {/* UPDATED: Uses backend temperature_2m */}
           <Text style={[styles.tempText, { color: theme.text }]}>
             {weatherData?.temp !== undefined
               ? `${Math.round(weatherData.temp)}°C`
@@ -233,8 +185,23 @@ export default function WeatherWidget() {
           </Text>
         </View>
 
-        {/* UPDATED: Uses overallSummary as requested */}
-        <Text style={[styles.weatherDesc, { color: theme.text }]}>
+        {/*  Weather code summary (short description from backend) */}
+        <Text
+          style={[
+            styles.weatherDesc,
+            { color: theme.text, fontWeight: "600", marginBottom: 4 },
+          ]}
+        >
+          {weatherData?.description || "—"}
+        </Text>
+
+        {/*  overallSummary as secondary summary */}
+        <Text
+          style={[
+            styles.weatherDesc,
+            { color: theme.text, opacity: 0.85, fontSize: moderateScale(11.5) },
+          ]}
+        >
           {weatherData?.overallSummary || "Fetching weather..."}
         </Text>
 
@@ -259,7 +226,7 @@ export default function WeatherWidget() {
         </TouchableOpacity>
       </View>
 
-      {/* Vertical divider between left and right panels */}
+      {/* Vertical divider */}
       <View
         style={[
           styles.weatherDivider,
@@ -269,9 +236,8 @@ export default function WeatherWidget() {
         ]}
       />
 
-      {/* RIGHT SIDE — Humidity, Feels like (Wind removed) */}
+      {/* RIGHT SIDE — Humidity, Feels like */}
       <View style={styles.weatherRight}>
-        {/* UPDATED: Humidity from backend relative_humidity_2m */}
         <View style={styles.weatherStatItem}>
           <Ionicons
             name="water-outline"
@@ -290,7 +256,6 @@ export default function WeatherWidget() {
           </View>
         </View>
 
-        {/* UPDATED: Feels like from backend apparent_temperature */}
         <View style={styles.weatherStatItem}>
           <Ionicons
             name="thermometer-outline"
@@ -314,7 +279,7 @@ export default function WeatherWidget() {
 }
 
 const styles = StyleSheet.create({
-  // NO CHANGES to styles (all existing styles preserved)
+  // to styles
   weatherWidget: {
     flexDirection: "row",
     borderRadius: moderateScale(16),

@@ -56,3 +56,5 @@ export const getWeatherIcon = (code: number): string => {
   if ([71, 73, 75].includes(code)) return "snow-outline";
   return "cloud-outline"; // fallback
 };
+
+export const KHAYA_API_KEY = process.env.EXPO_KHAYA_API_KEY as string;

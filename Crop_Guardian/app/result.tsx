@@ -1,10 +1,9 @@
-// app/result.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React from "react";
+import React, { useEffect, useState } from "react"; // UPDATED: Hooks for TTS
 import {
-  Dimensions,
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,11 +13,16 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-const { width } = Dimensions.get("window");
+// NEW ADDITION: Modern expo-audio + status hook
+import API from "@/services/api"; // UPDATED: For proxy call
+import { useAuthStore } from "@/stores/authStore"; // UPDATED: Language check
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 
 export default function ResultScreen() {
   const router = useRouter();
   const { data } = useLocalSearchParams<{ data?: string }>();
+
+  const user = useAuthStore((state) => state.user);
 
   let scanResult: any = null;
   if (data) {
@@ -29,11 +33,29 @@ export default function ResultScreen() {
     }
   }
 
-  // Hardcoded colors for this specific dark theme screen
-  const backgroundColor = "#083D04"; // A deep dark green
-  const cardColor = "rgba(255, 255, 255, 0.1)"; // Translucent overlay for cards
+  const backgroundColor = "#083D04";
+  const cardColor = "rgba(255, 255, 255, 0.1)";
   const redColor = "#FF4D4D";
   const brightGreenColor = "#4ADE80";
+
+  // NEW ADDITION: TTS States
+  const [isTtsLoading, setIsTtsLoading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const player = useAudioPlayer();
+  const status = useAudioPlayerStatus(player); // NEW ADDITION: Better status tracking
+
+  // NEW ADDITION: Sync isPlaying with status
+  useEffect(() => {
+    setIsPlaying(status.playing || false);
+  }, [status.playing]);
+
+  // NEW ADDITION: Cleanup
+  useEffect(() => {
+    return () => {
+      player.pause();
+    };
+  }, [player]);
 
   const formatConfidence = (conf: any) => {
     if (conf === undefined || conf === null) return "92%";
@@ -66,10 +88,49 @@ export default function ResultScreen() {
     router.push({
       pathname: "/listening",
       params: {
-        diseaseName: scanResult?.diseaseName || "Septoria",
+        diseaseName: scanResult?.diseaseName || "Unknown",
         recommendations: getActions().join(" "),
       },
     });
+  };
+
+  // NEW ADDITION: Secure Proxy TTS (recommended)
+  const toggleTts = async () => {
+    if (
+      !scanResult
+      // || user?.language !== "tw"
+    )
+      return;
+
+    const descriptionText =
+      scanResult.symptoms ||
+      scanResult.causes ||
+      "No detailed description available for this detection.";
+
+    if (isPlaying) {
+      player.pause();
+      return;
+    }
+
+    setIsTtsLoading(true);
+    try {
+      const response = await API.post("api/tts/generate", {
+        text: descriptionText,
+        language: "tw",
+      });
+
+      if (response.data.success && response.data.audioBase64) {
+        const audioUri = `data:audio/wav;base64,${response.data.audioBase64}`;
+        player.replace(audioUri);
+        await player.play();
+      } else {
+        console.error("TTS failed:", response.data.message);
+      }
+    } catch (error) {
+      console.error("TTS Error:", error);
+    } finally {
+      setIsTtsLoading(false);
+    }
   };
 
   return (
@@ -83,6 +144,7 @@ export default function ResultScreen() {
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.iconButton}
+            disabled={isTtsLoading}
           >
             <Ionicons
               name="arrow-back-circle-outline"
@@ -108,7 +170,6 @@ export default function ResultScreen() {
           </View>
         </View>
 
-        {/* Title */}
         <Text style={styles.mainTitle}>Result</Text>
 
         {/* Disease Info Card */}
@@ -131,12 +192,12 @@ export default function ResultScreen() {
               Disease Detected
             </Text>
             <Text style={styles.diseaseName}>
-              {scanResult?.diseaseName || "Septoria"}
+              {scanResult?.diseaseName || "Unknown"}
             </Text>
             <Text style={styles.diseaseSubtitle}>
               {scanResult?.detectedCrop
                 ? `On ${scanResult.detectedCrop}`
-                : "A leaf spot fungus"}
+                : "No specific crop identified"}
             </Text>
             <View style={styles.confidenceRow}>
               <Text style={styles.confidenceLabel}>Confidence: </Text>
@@ -149,22 +210,43 @@ export default function ResultScreen() {
           </View>
         </View>
 
-        {/* Description Card */}
+        {/* Description Card with TTS */}
         <View
           style={[
             styles.card,
             { backgroundColor: cardColor, flexDirection: "column" },
           ]}
         >
-          <Text style={styles.cardTitle}>Description</Text>
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardTitle}>Description</Text>
+            {user?.language === "tw" ||
+              (user?.language === "en" && (
+                <TouchableOpacity
+                  onPress={toggleTts}
+                  disabled={isTtsLoading}
+                  style={styles.ttsButton}
+                >
+                  {isTtsLoading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Ionicons
+                      name={isPlaying ? "pause-circle" : "volume-medium"}
+                      size={moderateScale(24)}
+                      color="#FFFFFF"
+                    />
+                  )}
+                </TouchableOpacity>
+              ))}
+          </View>
+
           <Text style={styles.cardText}>
             {scanResult?.symptoms ||
               scanResult?.causes ||
-              "Septoria, commonly known as a leaf spot is a species of fungus that infects vegetables, trees and ornamental plants. In some cases damage is insignificant, in others there's no hope."}
+              "No detailed description available for this detection."}
           </Text>
         </View>
 
-        {/* Recommended Actions Card */}
+        {/* Recommended Actions */}
         <View
           style={[
             styles.card,
@@ -176,7 +258,6 @@ export default function ResultScreen() {
           ]}
         >
           <Text style={styles.cardTitle}>Recommended Actions</Text>
-
           {getActions().map((action, index) => (
             <View key={index} style={styles.actionItem}>
               <Ionicons
@@ -189,15 +270,18 @@ export default function ResultScreen() {
           ))}
         </View>
 
-        {/* Action Buttons */}
         <View style={styles.bottomButtonsContainer}>
-          <TouchableOpacity style={styles.primaryButton}>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            disabled={isTtsLoading}
+          >
             <Text style={styles.primaryButtonText}>View Details</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={handleListen}
+            disabled={isTtsLoading}
           >
             <Ionicons
               name="volume-medium"
@@ -214,9 +298,7 @@ export default function ResultScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
+  safeArea: { flex: 1 },
   scrollContainer: {
     paddingHorizontal: scale(16),
     paddingBottom: verticalScale(30),
@@ -228,9 +310,7 @@ const styles = StyleSheet.create({
     paddingTop: verticalScale(10),
     paddingBottom: verticalScale(10),
   },
-  iconButton: {
-    padding: scale(4),
-  },
+  iconButton: { padding: scale(4) },
   headerRight: {
     flexDirection: "row",
     alignItems: "center",
@@ -283,24 +363,17 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(14),
     marginBottom: verticalScale(10),
   },
-  confidenceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  confidenceRow: { flexDirection: "row", alignItems: "center" },
   confidenceLabel: {
     color: "#FFFFFF",
     fontSize: moderateScale(13),
     fontWeight: "600",
   },
-  confidenceValue: {
-    fontSize: moderateScale(13),
-    fontWeight: "700",
-  },
+  confidenceValue: { fontSize: moderateScale(13), fontWeight: "700" },
   cardTitle: {
     color: "#FFFFFF",
     fontSize: moderateScale(16),
     fontWeight: "600",
-    marginBottom: verticalScale(12),
   },
   cardText: {
     color: "#E5E7EB",
@@ -317,11 +390,9 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(14),
     marginLeft: scale(12),
   },
-  bottomButtonsContainer: {
-    gap: verticalScale(16),
-  },
+  bottomButtonsContainer: { gap: verticalScale(16) },
   primaryButton: {
-    backgroundColor: "#FFFFE7", // Cream color from theme background
+    backgroundColor: "#FFFFE7",
     borderRadius: moderateScale(30),
     paddingVertical: verticalScale(14),
     alignItems: "center",
@@ -346,7 +417,14 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(16),
     fontWeight: "700",
   },
-  buttonIcon: {
-    marginRight: scale(8),
+  buttonIcon: { marginRight: scale(8) },
+
+  // NEW ADDITION: TTS styles
+  cardTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: verticalScale(12),
   },
+  ttsButton: { padding: scale(4) },
 });

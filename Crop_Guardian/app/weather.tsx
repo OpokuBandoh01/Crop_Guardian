@@ -25,10 +25,6 @@ import API from "@/services/api";
 import { getLocationName, getWeatherIcon } from "@/utils/utilities";
 import * as Location from "expo-location";
 
-// TYPESCRIPT NOTE: these interfaces describe the exact shape of data
-// returned by the backend, so TypeScript can warn us at compile time
-// if we try to read a field that does not exist (e.g. a typo), instead
-// of only finding out when the app crashes at runtime.
 interface BackendCurrent {
   temperature_2m: number;
   relative_humidity_2m: number;

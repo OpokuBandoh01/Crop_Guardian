@@ -1,3 +1,4 @@
+// stores/authStore.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -7,6 +8,7 @@ interface User {
   id?: string;
   email?: string;
   fullName?: string;
+  language?: string;
 }
 
 interface AuthStore {
@@ -18,6 +20,7 @@ interface AuthStore {
   login: (token: string, user: User) => void;
   logout: () => void;
   setHasHydrated: (state: boolean) => void;
+  updateUser: (updatedUser: Partial<User>) => void;
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -58,6 +61,10 @@ export const useAuthStore = create<AuthStore>()(
         set({
           hasHydrated: state,
         }),
+      updateUser: (updatedUser) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, ...updatedUser } : updatedUser,
+        })),
     }),
     {
       // persist auth state

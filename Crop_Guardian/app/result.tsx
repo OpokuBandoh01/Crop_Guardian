@@ -1,9 +1,12 @@
+// app/result.tsx
+
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react"; //  Hooks for TTS
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Modal, //  for the suggest-crop modal
   ScrollView,
   StyleSheet,
   Text,
@@ -13,10 +16,20 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-//  Modern expo-audio + status hook
-import API from "@/services/api"; //  For proxy call
-import { useAuthStore } from "@/stores/authStore"; //  Language check
+//  BlurView for modal backdrop blur
+import { BlurView } from "expo-blur";
+
+import API from "@/services/api";
+import { useAuthStore } from "@/stores/authStore";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+
+// TypeScript: describe the shape of the suggestAddToMyCrops object
+// so TypeScript can validate every access to its properties.
+interface SuggestCrop {
+  suggested: boolean;
+  cropType: string;
+  message: string;
+}
 
 export default function ResultScreen() {
   const router = useRouter();
@@ -27,6 +40,8 @@ export default function ResultScreen() {
 
   console.log("language", user?.language);
 
+  // TypeScript: scanResult is typed as any because the backend response
+  // shape may grow over time — strict typing is handled via SuggestCrop below.
   let scanResult: any = null;
   if (data) {
     try {
@@ -41,12 +56,28 @@ export default function ResultScreen() {
   const redColor = "#FF4D4D";
   const brightGreenColor = "#4ADE80";
 
+  // -- TTS state (NO CHANGES) --
   const [isTtsLoading, setIsTtsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const player = useAudioPlayer();
   const status = useAudioPlayerStatus(player);
   const isMounted = useRef(true);
+
+  // --  Suggest-crop modal state --
+  // showSuggestModal: controls modal visibility
+  // isAddingCrop: true while the POST /api/crops/my-crops call is in flight
+  // addCropSuccess: true once the crop was added successfully
+  // addCropError: holds an error message string if the call fails
+  const [showSuggestModal, setShowSuggestModal] = useState(false);
+  const [isAddingCrop, setIsAddingCrop] = useState(false);
+  const [addCropSuccess, setAddCropSuccess] = useState(false);
+  const [addCropError, setAddCropError] = useState<string | null>(null);
+
+  // TypeScript: cast the suggest object through our SuggestCrop interface
+  // so downstream code gets proper type checking.
+  const suggestPayload: SuggestCrop | null =
+    scanResult?.suggestAddToMyCrops ?? null;
 
   useEffect(() => {
     refreshUser();
@@ -56,12 +87,18 @@ export default function ResultScreen() {
     setIsPlaying(status.playing || false);
   }, [status.playing]);
 
-  // //  Cleanup
-  // useEffect(() => {
-  //   return () => {
-  //     player.pause();
-  //   };
-  // }, [player]);
+  //  Auto-open the modal when the screen mounts if the backend
+  // returned suggested === true. We use a short delay (300ms) so the result
+  // screen has time to finish rendering before the modal appears -- this feels
+  // more natural to the user than an instant pop-up.
+  useEffect(() => {
+    if (suggestPayload?.suggested === true) {
+      const timer = setTimeout(() => {
+        setShowSuggestModal(true);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [suggestPayload?.suggested]);
 
   useEffect(() => {
     return () => {
@@ -74,6 +111,7 @@ export default function ResultScreen() {
     };
   }, [player]);
 
+  //  formatting/action helpers
   const formatConfidence = (conf: any) => {
     if (conf === undefined || conf === null) return "92%";
     const val = Number(conf);
@@ -111,13 +149,9 @@ export default function ResultScreen() {
     });
   };
 
-  //  Secure Proxy TTS (recommended)
+  //  TTS logic
   const toggleTts = async () => {
-    if (
-      !scanResult
-      // || user?.language !== "tw"
-    )
-      return;
+    if (!scanResult) return;
 
     const descriptionText =
       scanResult.symptoms ||
@@ -156,18 +190,188 @@ export default function ResultScreen() {
     }
   };
 
+  //  Calls POST /api/crops/my-crops with the cropType from
+  // the backend suggest payload. All interactive elements in the modal are
+  // disabled while this is in-flight (isAddingCrop === true).
+  const handleAddToCrops = async () => {
+    if (!suggestPayload?.cropType) return;
+
+    setIsAddingCrop(true);
+    setAddCropError(null);
+
+    try {
+      const response = await API.post("/api/crops/my-crops", {
+        cropType: suggestPayload.cropType,
+      });
+
+      if (response.data?.success) {
+        setAddCropSuccess(true);
+      } else {
+        // Backend returned a non-success without throwing -- treat as error
+        setAddCropError(
+          response.data?.message || "Could not add crop. Please try again.",
+        );
+      }
+    } catch (error: any) {
+      // TypeScript: error is typed as any because Axios errors don't have a
+      // fixed shape at compile time; we narrow to the .response path manually.
+      const serverMessage = error?.response?.data?.message;
+      setAddCropError(
+        serverMessage || "Something went wrong. Please try again.",
+      );
+    } finally {
+      setIsAddingCrop(false);
+    }
+  };
+
+  //  Dismiss modal and reset all modal-specific state so it
+  // starts fresh if somehow re-opened in the same session.
+  const handleDismissModal = () => {
+    if (isAddingCrop) return; // Block dismiss while a request is in-flight
+    setShowSuggestModal(false);
+    setAddCropSuccess(false);
+    setAddCropError(null);
+  };
+
   return (
+    // TypeScript: SafeAreaView accepts a standard ViewStyle, backgroundColor
+    // is a valid string here because React Native accepts any CSS color string.
     <SafeAreaView style={[styles.safeArea, { backgroundColor }]}>
+      {/*
+         Suggest-crop modal
+        ---------------------------------
+        - transparent={true} keeps the native Modal container clear so our
+          BlurView fills the full screen as the backdrop.
+        - animationType="fade" gives a smooth entrance instead of a slide
+          which would feel jarring right after seeing results.
+        - statusBarTranslucent lets the blur extend behind the status bar on
+          Android so the overlay truly covers the whole screen.
+        - All buttons and inputs inside are disabled when isAddingCrop is true.
+      */}
+      <Modal
+        visible={showSuggestModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={handleDismissModal}
+      >
+        {/* BlurView fills the whole screen and acts as the dimmed backdrop.
+            intensity 55 gives a strong enough blur to push the background into
+            the periphery without making it invisible. */}
+        <BlurView intensity={55} tint="dark" style={styles.modalBackdrop}>
+          {/* Tapping the backdrop area (outside the card) dismisses the modal,
+              but only when no request is in-flight. */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={handleDismissModal}
+            disabled={isAddingCrop}
+          />
+
+          {/* Modal card -- sits on top of the blur backdrop */}
+          <View style={styles.modalCard}>
+            {/* Icon at the top of the card */}
+            <View style={styles.modalIconWrapper}>
+              <Ionicons
+                name={addCropSuccess ? "checkmark-circle" : "leaf"}
+                size={moderateScale(40)}
+                color={addCropSuccess ? "#4ADE80" : "#094A04"}
+              />
+            </View>
+
+            {addCropSuccess ? (
+              /*
+                SUCCESS STATE: shown after the crop was added.
+                Displays a confirmation message and a single "Done" button.
+              */
+              <>
+                <Text style={styles.modalTitle}>Crop Added!</Text>
+                <Text style={styles.modalMessage}>
+                  {suggestPayload?.cropType} has been added to My Crops. You can
+                  now track its history and get personalised insights.
+                </Text>
+                <TouchableOpacity
+                  style={styles.modalPrimaryButton}
+                  onPress={handleDismissModal}
+                >
+                  <Text style={styles.modalPrimaryButtonText}>Done</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              /*
+                DEFAULT / ERROR STATE: shown immediately when the modal opens,
+                and also if the API call returns an error.
+              */
+              <>
+                <Text style={styles.modalTitle}>Add to My Crops?</Text>
+
+                {/* The message string comes directly from the backend payload */}
+                <Text style={styles.modalMessage}>
+                  {suggestPayload?.message}
+                </Text>
+
+                {/* Error banner -- only shown when addCropError is set */}
+                {addCropError ? (
+                  <View style={styles.errorBanner}>
+                    <Ionicons
+                      name="alert-circle-outline"
+                      size={moderateScale(16)}
+                      color="#FF4D4D"
+                    />
+                    <Text style={styles.errorBannerText}>{addCropError}</Text>
+                  </View>
+                ) : null}
+
+                {/* Primary CTA: adds the crop */}
+                <TouchableOpacity
+                  style={[
+                    styles.modalPrimaryButton,
+                    isAddingCrop && styles.buttonDisabled,
+                  ]}
+                  onPress={handleAddToCrops}
+                  disabled={isAddingCrop}
+                >
+                  {isAddingCrop ? (
+                    <ActivityIndicator size="small" color="#FFFFE7" />
+                  ) : (
+                    <Text style={styles.modalPrimaryButtonText}>
+                      Yes, Add Crop
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                {/* Secondary CTA: dismisses the modal without adding */}
+                <TouchableOpacity
+                  style={[
+                    styles.modalSecondaryButton,
+                    isAddingCrop && styles.buttonDisabled,
+                  ]}
+                  onPress={handleDismissModal}
+                  disabled={isAddingCrop}
+                >
+                  <Text style={styles.modalSecondaryButtonText}>Not Now</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </BlurView>
+      </Modal>
+
+      {/* ---- The rest of the screen is unchanged below ---- */}
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
+        //  Prevent scroll interaction with background while modal
+        // is open. scrollEnabled false when modal is showing avoids the user
+        // accidentally interacting with content behind the overlay.
+        scrollEnabled={!showSuggestModal}
       >
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.iconButton}
-            disabled={isTtsLoading}
+            disabled={isTtsLoading || showSuggestModal}
           >
             <Ionicons
               name="arrow-back-circle-outline"
@@ -176,14 +380,20 @@ export default function ResultScreen() {
             />
           </TouchableOpacity>
           <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.circleIconBg}>
+            <TouchableOpacity
+              style={styles.circleIconBg}
+              disabled={showSuggestModal}
+            >
               <Ionicons
                 name="bookmark"
                 size={moderateScale(18)}
                 color="#FFFFFF"
               />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.circleIconBg}>
+            <TouchableOpacity
+              style={styles.circleIconBg}
+              disabled={showSuggestModal}
+            >
               <Ionicons
                 name="share-social"
                 size={moderateScale(18)}
@@ -245,7 +455,7 @@ export default function ResultScreen() {
             {user?.language === "tw" && (
               <TouchableOpacity
                 onPress={toggleTts}
-                disabled={isTtsLoading}
+                disabled={isTtsLoading || showSuggestModal}
                 style={styles.ttsButton}
               >
                 {isTtsLoading ? (
@@ -294,16 +504,22 @@ export default function ResultScreen() {
 
         <View style={styles.bottomButtonsContainer}>
           <TouchableOpacity
-            style={styles.primaryButton}
-            disabled={isTtsLoading}
+            style={[
+              styles.primaryButton,
+              showSuggestModal && styles.buttonDisabled,
+            ]}
+            disabled={isTtsLoading || showSuggestModal}
           >
             <Text style={styles.primaryButtonText}>View Details</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.secondaryButton}
+            style={[
+              styles.secondaryButton,
+              showSuggestModal && styles.buttonDisabled,
+            ]}
             onPress={handleListen}
-            disabled={isTtsLoading}
+            disabled={isTtsLoading || showSuggestModal}
           >
             <Ionicons
               name="volume-medium"
@@ -325,6 +541,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(16),
     paddingBottom: verticalScale(30),
   },
+
+  // -- NO CHANGES: existing styles --
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -440,8 +658,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   buttonIcon: { marginRight: scale(8) },
-
-  //  TTS styles
   cardTitleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -449,4 +665,113 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(12),
   },
   ttsButton: { padding: scale(4) },
+
+  // --  modal styles --
+
+  // Full-screen BlurView that acts as the backdrop
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: scale(24),
+  },
+
+  // The white card that floats on top of the blur
+  modalCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: moderateScale(20),
+    padding: moderateScale(24),
+    width: "100%",
+    alignItems: "center",
+    // Subtle shadow so the card lifts off the blurred background
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+
+  // Circular icon container at the top of the card
+  modalIconWrapper: {
+    width: moderateScale(70),
+    height: moderateScale(70),
+    borderRadius: moderateScale(35),
+    backgroundColor: "#F0FFF4",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: verticalScale(16),
+  },
+
+  modalTitle: {
+    fontSize: moderateScale(20),
+    fontWeight: "700",
+    color: "#094A04",
+    textAlign: "center",
+    marginBottom: verticalScale(10),
+  },
+
+  modalMessage: {
+    fontSize: moderateScale(14),
+    color: "#374151",
+    textAlign: "center",
+    lineHeight: moderateScale(22),
+    marginBottom: verticalScale(20),
+  },
+
+  // Red error banner shown below the message when the API call fails
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderRadius: moderateScale(8),
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(8),
+    marginBottom: verticalScale(14),
+    gap: scale(6),
+    width: "100%",
+  },
+  errorBannerText: {
+    color: "#FF4D4D",
+    fontSize: moderateScale(13),
+    flex: 1,
+  },
+
+  // Green "Yes, Add Crop" button
+  modalPrimaryButton: {
+    backgroundColor: "#094A04",
+    borderRadius: moderateScale(30),
+    paddingVertical: verticalScale(13),
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: verticalScale(10),
+    minHeight: verticalScale(48),
+  },
+  modalPrimaryButtonText: {
+    color: "#FFFFE7",
+    fontSize: moderateScale(15),
+    fontWeight: "700",
+  },
+
+  // Ghost "Not Now" button
+  modalSecondaryButton: {
+    borderRadius: moderateScale(30),
+    paddingVertical: verticalScale(13),
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    minHeight: verticalScale(48),
+  },
+  modalSecondaryButtonText: {
+    color: "#6B7280",
+    fontSize: moderateScale(15),
+    fontWeight: "600",
+  },
+
+  // Applied to any button that should appear disabled
+  buttonDisabled: {
+    opacity: 0.5,
+  },
 });

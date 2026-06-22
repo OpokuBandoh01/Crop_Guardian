@@ -1,16 +1,4 @@
-// //Store:
-
-// selectedRole
-// selectedCrops
-// hasOnboarded
-
-// Then:
-
-// user-role
-// crop-selection
-// review-selection
-// login
-// signup
+// stores/onboardingStore.ts
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";

@@ -50,7 +50,11 @@ interface DisplayWeather {
   overallSummary: string;
 }
 
-export default function WeatherWidget() {
+interface WeatherWidgetProps {
+  refreshTrigger?: number; 
+}
+
+export default function WeatherWidget({ refreshTrigger = 0 }: WeatherWidgetProps) {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
@@ -58,6 +62,10 @@ export default function WeatherWidget() {
   const [weatherData, setWeatherData] = useState<DisplayWeather | null>(null);
   const [loading, setLoading] = useState(true);
   const [permissionDenied, setPermissionDenied] = useState(false);
+
+    useEffect(() => {
+    fetchWeather();
+  }, [refreshTrigger]);
 
   const fetchWeather = async () => {
     try {

@@ -1,10 +1,15 @@
 // app/(tabs)/index.tsx
+import WeatherWidget from "@/components/WeatherWidget";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import API from "@/services/api";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Image,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,12 +18,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
-
-import { Colors } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import API from "@/services/api";
-
-import WeatherWidget from "@/components/WeatherWidget";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -29,6 +28,16 @@ export default function HomeScreen() {
   const [userData, setUserData] = useState<any>(null);
   const [myCrops, setMyCrops] = useState<any[]>([]);
   const [cropStages, setCropStages] = useState<Record<string, string>>({});
+  const [refreshing, setRefreshing] = useState(false);
+  const [weatherRefreshTrigger, setWeatherRefreshTrigger] = useState(0);
+
+  // Promise.all ensures the spinner stays visible until BOTH finish
+  const onRefresh = async () => {
+    setRefreshing(true);
+    setWeatherRefreshTrigger((prev) => prev + 1); // tells WeatherWidget to re-fetch
+    await Promise.all([fetchUser(), fetchMyCrops()]);
+    setRefreshing(false);
+  };
 
   const fetchUser = async () => {
     try {
@@ -100,6 +109,14 @@ export default function HomeScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.primary}
+            progressBackgroundColor={theme.surface}
+          />
+        }
       >
         {/* ================= HEADER SECTION ================= */}
 
@@ -137,7 +154,7 @@ export default function HomeScreen() {
 
         {/* ================= WEATHER SECTION ================= */}
 
-        <WeatherWidget />
+        <WeatherWidget refreshTrigger={weatherRefreshTrigger} />
 
         {/* ================= DISEASE SCAN BANNER ================= */}
         <View style={styles.scanBanner}>

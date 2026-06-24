@@ -1,5 +1,6 @@
 // stores/authStore.ts
 import API from "@/services/api";
+import { AppLocation } from "@/utils/utilities";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -10,6 +11,7 @@ interface User {
   email?: string;
   fullName?: string;
   language?: string;
+  location?: AppLocation;
 }
 
 interface AuthStore {

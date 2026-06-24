@@ -1,6 +1,15 @@
 // utils/utilities.ts
 import * as Location from "expo-location";
 
+export interface AppLocation {
+  latitude: number;
+  longitude: number;
+  address: string;
+  city?: string;
+  region?: GhanaRegion;
+  accuracy?: number; // meters
+}
+
 //  Reusable function for reverse geocoding
 export const getLocationName = async (
   latitude: number,
@@ -58,3 +67,40 @@ export const getWeatherIcon = (code: number): string => {
 };
 
 export const KHAYA_API_KEY = process.env.EXPO_KHAYA_API_KEY as string;
+
+//  Hardcoded list of all 16 Ghanaian regions for offline dropdown + suggestions (2026 accurate)
+export const GHANA_REGIONS = [
+  "Ahafo",
+  "Ashanti",
+  "Bono",
+  "Bono East",
+  "Central",
+  "Eastern",
+  "Greater Accra",
+  "North East",
+  "Northern",
+  "Oti",
+  "Savannah",
+  "Upper East",
+  "Upper West",
+  "Volta",
+  "Western",
+  "Western North",
+] as const;
+
+export type GhanaRegion = (typeof GHANA_REGIONS)[number];
+
+//  Format location for display (user-friendly)
+export const formatLocationDisplay = (location: AppLocation | null): string => {
+  if (!location) return "Ghana";
+  const parts = [location.city, location.region, "Ghana"].filter(Boolean);
+  return parts.join(", ") || location.address || "Unknown Location";
+};
+
+//  Get friendly accuracy string
+export const getAccuracyLabel = (accuracy?: number): string => {
+  if (!accuracy) return "";
+  if (accuracy < 50) return "Very High Accuracy (~<50m)";
+  if (accuracy < 200) return "High Accuracy (~50-200m)";
+  return "Approximate Accuracy";
+};

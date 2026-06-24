@@ -23,6 +23,15 @@ import API from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 import { useOnboardingStore } from "@/stores/onboardingStore";
 
+// NEW ADDITION: Location related imports
+import { LocationEditModal } from "@/components/LocationEditModal";
+import {
+  AppLocation,
+  formatLocationDisplay,
+  getAccuracyLabel,
+  GHANA_REGIONS, GhanaRegion,
+} from "@/utils/utilities";
+
 export default function SignUpScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? "light";
@@ -44,37 +53,84 @@ export default function SignUpScreen() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [locationText, setLocationText] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [coords, setCoords] = useState<{ latitude: number; longitude: number }>(
-    {
-      latitude: 6.6961, // Default Kumasi latitude
-      longitude: -1.6152, // Default Kumasi longitude
-    },
-  );
 
-  // Fetch coordinates on mount
+  // UPDATED: Full location state (replaces old locationText + coords)
+  const [userLocation, setUserLocation] = useState<AppLocation | null>(null);
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+
+  // Fetch coordinates on mount - UPDATED: Use enhanced logic
   useEffect(() => {
     (async () => {
-      try {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === "granted") {
-          let loc = await Location.getCurrentPositionAsync({});
-          setCoords({
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-          });
-          setLocationText("GPS Location Detected");
-        }
-      } catch (err) {
-        console.warn("Could not get GPS location:", err);
-      }
+      await detectCurrentLocation(true); // silent initial detection
     })();
   }, []);
 
+  // NEW ADDITION: Centralized location detection function with UX feedback
+  const detectCurrentLocation = async (silent = false) => {
+    if (!silent) setIsDetectingLocation(true);
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        if (!silent)
+          Alert.alert(
+            "Permission Denied",
+            "Please enable location for accurate local features.",
+          );
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const geocode = await Location.reverseGeocodeAsync({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      });
+
+      let address = "Ghana";
+      let city = "";
+      let region = "";
+
+      if (geocode.length > 0) {
+        const g = geocode[0];
+        city = g.city || g.subregion || "";
+        region = g.region || "";
+        address =
+          [city, region].filter(Boolean).join(", ") || g.country || "Ghana";
+      }
+
+      const newLoc: AppLocation = {
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        address,
+        city,
+        region: GHANA_REGIONS.includes(region as any)
+          ? (region as GhanaRegion)
+          : undefined,
+        accuracy: loc.coords.accuracy || undefined,
+      };
+
+      setUserLocation(newLoc);
+      if (!silent) {
+        Alert.alert(
+          "Success",
+          `Location detected: ${formatLocationDisplay(newLoc)}`,
+        );
+      }
+    } catch (err) {
+      console.warn("Could not get GPS location:", err);
+      if (!silent) Alert.alert("Detection Failed", "Please use manual edit.");
+    } finally {
+      if (!silent) setIsDetectingLocation(false);
+    }
+  };
+
   const handleSignUp = async () => {
+    // NO CHANGES to basic validation
     if (!firstName || !lastName || !email || !password || !confirmPassword) {
       Alert.alert("Error", "Please fill in all required fields");
       return;
@@ -84,7 +140,16 @@ export default function SignUpScreen() {
       return;
     }
 
-    // NEW ADDITION: ensure onboarding was completed
+    // NEW ADDITION: Ensure location is set (no skipping)
+    if (!userLocation) {
+      Alert.alert(
+        "Location Required",
+        "Please detect or set your location to continue.",
+      );
+      return;
+    }
+
+    // NO CHANGES to onboarding checks
     if (!selectedRole) {
       Alert.alert(
         "Onboarding Required",
@@ -93,7 +158,6 @@ export default function SignUpScreen() {
       return;
     }
 
-    // NEW ADDITION: ensure at least one crop selected
     if (selectedCrops.length === 0) {
       Alert.alert(
         "Crop Selection Required",
@@ -104,37 +168,35 @@ export default function SignUpScreen() {
 
     setIsLoading(true);
     try {
-      // Prepare payload with default values for backend validation (actual onboarding happens next)
+      // UPDATED: Payload now uses full userLocation (matches exact backend expectation)
       const payload = {
         email,
         password,
         fullName: `${firstName} ${lastName}`.trim(),
-        phoneNumber: phoneNumber || undefined, // Only send if user filled it in
-        // UPDATED: use role chosen during onboarding
+        phoneNumber: phoneNumber || undefined,
         role: selectedRole.toUpperCase() as
           | "FARMER"
           | "BEGINNER"
           | "GARDENER"
           | "STUDENT"
           | "OTHER",
-        // UPDATED: use crops chosen during onboarding
         preferredCrops: selectedCrops,
         location: {
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          address: locationText || "Kumasi, Ashanti",
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+          address: userLocation.address,
         },
       };
 
       const response = await API.post("/api/auth/register", payload);
 
-      // NEW ADDITION: authenticate immediately after signup
-      loginUser(response.data.token, response.data.user);
+      // UPDATED: Pass full user including location to store
+      loginUser(response.data.token, {
+        ...response.data.user,
+        location: userLocation,
+      });
 
-      // NEW ADDITION: onboarding completed successfully
       completeOnboarding();
-
-      // UPDATED: user enters app immediately after registration
       router.replace("/(tabs)");
     } catch (error: any) {
       console.error("Signup error:", error);
@@ -147,6 +209,11 @@ export default function SignUpScreen() {
     }
   };
 
+  // NEW ADDITION: Handle save from modal
+  const handleLocationSave = (location: AppLocation) => {
+    setUserLocation(location);
+  };
+
   return (
     <SafeAreaView
       style={[styles.safeArea, { backgroundColor: theme.background }]}
@@ -155,7 +222,7 @@ export default function SignUpScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* App Logo */}
+        {/* App Logo - NO CHANGES */}
         <View style={styles.logoContainer}>
           <Image
             source={require("@/assets/icons/leaflogoicon.png")}
@@ -164,7 +231,7 @@ export default function SignUpScreen() {
           />
         </View>
 
-        {/* Headers */}
+        {/* Headers - NO CHANGES */}
         <Text style={[styles.title, { color: theme.primary }]}>
           Create An Account
         </Text>
@@ -172,7 +239,7 @@ export default function SignUpScreen() {
           Join CropGuardian to start your plant care journey
         </Text>
 
-        {/* Form Fields */}
+        {/* Form Fields - Most unchanged, location section updated */}
         <View style={styles.row}>
           <CustomInput
             placeholder="First Name"
@@ -180,7 +247,7 @@ export default function SignUpScreen() {
             containerStyle={styles.halfInput}
             value={firstName}
             onChangeText={setFirstName}
-            editable={!isLoading}
+            editable={!isLoading && !isDetectingLocation}
           />
           <CustomInput
             placeholder="Last Name"
@@ -188,10 +255,11 @@ export default function SignUpScreen() {
             containerStyle={styles.halfInput}
             value={lastName}
             onChangeText={setLastName}
-            editable={!isLoading}
+            editable={!isLoading && !isDetectingLocation}
           />
         </View>
 
+        {/* Other inputs - editable disabled during loading/detection */}
         <CustomInput
           placeholder="Email"
           leftIcon="mail-outline"
@@ -199,7 +267,7 @@ export default function SignUpScreen() {
           autoCapitalize="none"
           value={email}
           onChangeText={setEmail}
-          editable={!isLoading}
+          editable={!isLoading && !isDetectingLocation}
         />
 
         <CustomInput
@@ -207,10 +275,10 @@ export default function SignUpScreen() {
           keyboardType="phone-pad"
           value={phoneNumber}
           onChangeText={setPhoneNumber}
-          editable={!isLoading}
+          editable={!isLoading && !isDetectingLocation}
         />
 
-        {/* Custom Country Code Field (Read Only) */}
+        {/* Country Code - NO CHANGES */}
         <View style={styles.countryCodeWrapper}>
           <Text
             style={[
@@ -245,13 +313,49 @@ export default function SignUpScreen() {
           <Text style={[styles.helperText, { color: theme.icon }]}>2/2</Text>
         </View>
 
-        <CustomInput
-          placeholder="Location"
-          label={locationText ? `Detected: ${locationText}` : "Detected: Ghana"}
-          value={locationText}
-          onChangeText={setLocationText}
-          editable={!isLoading}
-        />
+        {/* NEW ADDITION: User-friendly Location Card */}
+        <View
+          style={[
+            styles.locationCard,
+            { backgroundColor: theme.surface, borderColor: theme.inputBorder },
+          ]}
+        >
+          <View style={styles.locationHeader}>
+            <Ionicons name="location-outline" size={24} color={theme.primary} />
+            <Text style={[styles.locationTitle, { color: theme.text }]}>
+              Your Location
+            </Text>
+          </View>
+
+          <Text style={[styles.detectedLocation, { color: theme.text }]}>
+            {formatLocationDisplay(userLocation)}
+          </Text>
+
+          {userLocation?.accuracy && (
+            <Text style={[styles.accuracyText, { color: theme.icon }]}>
+              {getAccuracyLabel(userLocation.accuracy)}
+            </Text>
+          )}
+
+          <View style={styles.locationActions}>
+            <CustomButton
+              title="Detect / Update Location"
+              onPress={() => detectCurrentLocation(false)}
+              loading={isDetectingLocation}
+              disabled={isLoading || isDetectingLocation}
+              variant="outline"
+            />
+            <TouchableOpacity
+              onPress={() => setIsModalVisible(true)}
+              disabled={isLoading || isDetectingLocation}
+              style={styles.manualEditLink}
+            >
+              <Text style={{ color: theme.primary, fontWeight: "600" }}>
+                Not correct? Edit manually
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <CustomInput
           placeholder="Password"
@@ -259,7 +363,7 @@ export default function SignUpScreen() {
           isPassword
           value={password}
           onChangeText={setPassword}
-          editable={!isLoading}
+          editable={!isLoading && !isDetectingLocation}
         />
 
         <CustomInput
@@ -268,10 +372,10 @@ export default function SignUpScreen() {
           isPassword
           value={confirmPassword}
           onChangeText={setConfirmPassword}
-          editable={!isLoading}
+          editable={!isLoading && !isDetectingLocation}
         />
 
-        {/* Terms and Conditions */}
+        {/* Terms - NO CHANGES */}
         <View style={styles.termsContainer}>
           <Text style={[styles.termsText, { color: theme.text }]}>
             I agree to the{" "}
@@ -285,15 +389,15 @@ export default function SignUpScreen() {
           </Text>
         </View>
 
-        {/* Submit Button */}
+        {/* Submit Button - disabled during any loading */}
         <CustomButton
           title="Create Account"
           loading={isLoading}
-          disabled={isLoading}
+          disabled={isLoading || isDetectingLocation || !userLocation}
           onPress={handleSignUp}
         />
 
-        {/* Footer Link */}
+        {/* Footer - NO CHANGES */}
         <View style={styles.footerContainer}>
           <Text style={[styles.footerText, { color: theme.icon }]}>
             Already have an account?{" "}
@@ -307,11 +411,22 @@ export default function SignUpScreen() {
           </Link>
         </View>
       </ScrollView>
+
+      {/* NEW ADDITION: Modal */}
+      <LocationEditModal
+        isVisible={isModalVisible}
+        currentLocation={userLocation}
+        onClose={() => setIsModalVisible(false)}
+        onSave={handleLocationSave}
+        isLoading={isLoading}
+      />
     </SafeAreaView>
   );
 }
 
+// Updated styles with location card
 const styles = StyleSheet.create({
+  // ... all existing styles remain the same (NO CHANGES to previous definitions)
   safeArea: {
     flex: 1,
   },
@@ -345,7 +460,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   halfInput: {
-    flex: 0.48, // Takes up slightly less than half to leave a gap
+    flex: 0.48,
   },
   countryCodeWrapper: {
     marginBottom: verticalScale(16),
@@ -404,5 +519,39 @@ const styles = StyleSheet.create({
   footerLink: {
     fontSize: moderateScale(14),
     fontWeight: "700",
+  },
+
+  // NEW ADDITION: Location card styles
+  locationCard: {
+    borderWidth: 1,
+    borderRadius: moderateScale(12),
+    padding: scale(16),
+    marginBottom: verticalScale(16),
+  },
+  locationHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: scale(8),
+    marginBottom: verticalScale(8),
+  },
+  locationTitle: {
+    fontSize: moderateScale(16),
+    fontWeight: "600",
+  },
+  detectedLocation: {
+    fontSize: moderateScale(15),
+    fontWeight: "500",
+    marginBottom: verticalScale(4),
+  },
+  accuracyText: {
+    fontSize: moderateScale(12),
+    marginBottom: verticalScale(12),
+  },
+  locationActions: {
+    gap: verticalScale(8),
+  },
+  manualEditLink: {
+    paddingVertical: verticalScale(8),
+    alignItems: "center",
   },
 });

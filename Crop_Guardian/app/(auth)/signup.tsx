@@ -1,8 +1,10 @@
-// app/(auth)/signup
+// app/(auth)/signup.tsx
 import { Ionicons } from "@expo/vector-icons";
+import { zodResolver } from "@hookform/resolvers/zod";
 import * as Location from "expo-location";
 import { Link, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import {
   Alert,
   Image,
@@ -17,63 +19,110 @@ import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
 import { CustomButton } from "@/components/CustomButton";
 import { CustomInput } from "@/components/CustomInput";
+import { LocationEditModal } from "@/components/LocationEditModal";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { SignUpFormData, signUpSchema } from "@/schemas/authShemas";
 import API from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 import { useOnboardingStore } from "@/stores/onboardingStore";
-
-// NEW ADDITION: Location related imports
-import { LocationEditModal } from "@/components/LocationEditModal";
 import {
   AppLocation,
   formatLocationDisplay,
   getAccuracyLabel,
-  GHANA_REGIONS, GhanaRegion,
+  GHANA_REGIONS,
+  GhanaRegion,
 } from "@/utils/utilities";
 
 export default function SignUpScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
+
   const loginUser = useAuthStore((state) => state.login);
 
-  // NEW ADDITION: get role selected during onboarding
+  // Pull role + crops set during the onboarding flow
   const selectedRole = useOnboardingStore((state) => state.selectedRole);
-
-  // NEW ADDITION: get crops selected during onboarding
   const selectedCrops = useOnboardingStore((state) => state.selectedCrops);
-
-  // NEW ADDITION: mark onboarding completed
   const completeOnboarding = useOnboardingStore(
     (state) => state.completeOnboarding,
   );
 
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  // Track loading states separately so the UI can disable correctly
   const [isLoading, setIsLoading] = useState(false);
-
-  // UPDATED: Full location state (replaces old locationText + coords)
-  const [userLocation, setUserLocation] = useState<AppLocation | null>(null);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
 
-  // Fetch coordinates on mount - UPDATED: Use enhanced logic
+  // Location lives outside react-hook-form because it is not a plain text field
+  const [userLocation, setUserLocation] = useState<AppLocation | null>(null);
+
+  // ─── React Hook Form setup ────────────────────────────────────────────────
+  // mode: "onBlur" tells react-hook-form to validate each field the moment
+  // the user moves away from it (on blur), not just on submit.
+  // This gives the "live check" feeling — the user fills a field, tabs away,
+  // and sees an error (or no error) immediately under that field.
+  //
+  // zodResolver wires our Zod schema into react-hook-form so it uses
+  // Zod's rules for every validation run.
+  const {
+    control,
+    handleSubmit,
+    watch, // watch() lets us read field values to drive the disabled logic
+    formState: { errors, isValid },
+  } = useForm<SignUpFormData>({
+    resolver: zodResolver(signUpSchema),
+    // mode "onBlur": validate when focus leaves a field
+    // reValidateMode "onChange": re-validate as the user types AFTER the first error
+    mode: "onBlur",
+    reValidateMode: "onChange",
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phoneNumber: "",
+      password: "",
+      confirmPassword: "",
+    },
+  });
+
+  // Watch all required fields so the button disabled check is reactive.
+  // watch() subscribes to value changes without causing the form to validate.
+  const watchedFirstName = watch("firstName");
+  const watchedLastName = watch("lastName");
+  const watchedEmail = watch("email");
+  const watchedPassword = watch("password");
+  const watchedConfirm = watch("confirmPassword");
+
+  // The Create Account button is only enabled when:
+  // 1. All required fields have values (not empty strings)
+  // 2. Zod considers the whole form valid (isValid === true)
+  // 3. The user has confirmed a location
+  // 4. Nothing is loading
+  // Using isValid from react-hook-form means Zod errors also block the button.
+  const allRequiredFilled =
+    watchedFirstName.trim().length >= 2 &&
+    watchedLastName.trim().length >= 2 &&
+    watchedEmail.trim().length > 0 &&
+    watchedPassword.length >= 8 &&
+    watchedConfirm.length > 0;
+
+  const canSubmit =
+    isValid &&
+    allRequiredFilled &&
+    !!userLocation &&
+    !isLoading &&
+    !isDetectingLocation;
+
+  // Silently detect location when the screen mounts
   useEffect(() => {
-    (async () => {
-      await detectCurrentLocation(true); // silent initial detection
-    })();
+    detectCurrentLocation(true);
   }, []);
 
-  // NEW ADDITION: Centralized location detection function with UX feedback
+  // ─── Location detection ───────────────────────────────────────────────────
   const detectCurrentLocation = async (silent = false) => {
     if (!silent) setIsDetectingLocation(true);
     try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         if (!silent)
           Alert.alert(
@@ -86,6 +135,7 @@ export default function SignUpScreen() {
       const loc = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
+
       const geocode = await Location.reverseGeocodeAsync({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
@@ -108,39 +158,30 @@ export default function SignUpScreen() {
         longitude: loc.coords.longitude,
         address,
         city,
-        region: GHANA_REGIONS.includes(region as any)
+        region: GHANA_REGIONS.includes(region as GhanaRegion)
           ? (region as GhanaRegion)
           : undefined,
         accuracy: loc.coords.accuracy || undefined,
       };
 
       setUserLocation(newLoc);
-      if (!silent) {
+      if (!silent)
         Alert.alert(
-          "Success",
-          `Location detected: ${formatLocationDisplay(newLoc)}`,
+          "Location Detected",
+          `Location set to: ${formatLocationDisplay(newLoc)}`,
         );
-      }
     } catch (err) {
       console.warn("Could not get GPS location:", err);
-      if (!silent) Alert.alert("Detection Failed", "Please use manual edit.");
+      if (!silent)
+        Alert.alert("Detection Failed", "Please use the manual edit option.");
     } finally {
       if (!silent) setIsDetectingLocation(false);
     }
   };
 
-  const handleSignUp = async () => {
-    // NO CHANGES to basic validation
-    if (!firstName || !lastName || !email || !password || !confirmPassword) {
-      Alert.alert("Error", "Please fill in all required fields");
-      return;
-    }
-    if (password !== confirmPassword) {
-      Alert.alert("Error", "Passwords do not match");
-      return;
-    }
-
-    // NEW ADDITION: Ensure location is set (no skipping)
+  // ─── Form submission ──────────────────────────────────────────────────────
+  // handleSubmit only calls this after Zod passes — bad data never reaches here.
+  const handleSignUp = async (data: SignUpFormData) => {
     if (!userLocation) {
       Alert.alert(
         "Location Required",
@@ -149,7 +190,6 @@ export default function SignUpScreen() {
       return;
     }
 
-    // NO CHANGES to onboarding checks
     if (!selectedRole) {
       Alert.alert(
         "Onboarding Required",
@@ -168,12 +208,20 @@ export default function SignUpScreen() {
 
     setIsLoading(true);
     try {
-      // UPDATED: Payload now uses full userLocation (matches exact backend expectation)
+      // The phoneNumber from Zod has already been transformed to digits only
+      // (or undefined if blank). Prefix +233 for the backend if present.
+      // Strip any leading 0 before adding country code.
+      let formattedPhone: string | undefined = undefined;
+      if (data.phoneNumber) {
+        const digits = data.phoneNumber.replace(/^0/, ""); // remove leading 0
+        formattedPhone = `+233${digits}`;
+      }
+
       const payload = {
-        email,
-        password,
-        fullName: `${firstName} ${lastName}`.trim(),
-        phoneNumber: phoneNumber || undefined,
+        email: data.email.trim().toLowerCase(),
+        password: data.password,
+        fullName: `${data.firstName.trim()} ${data.lastName.trim()}`,
+        phoneNumber: formattedPhone,
         role: selectedRole.toUpperCase() as
           | "FARMER"
           | "BEGINNER"
@@ -190,7 +238,6 @@ export default function SignUpScreen() {
 
       const response = await API.post("/api/auth/register", payload);
 
-      // UPDATED: Pass full user including location to store
       loginUser(response.data.token, {
         ...response.data.user,
         location: userLocation,
@@ -200,6 +247,7 @@ export default function SignUpScreen() {
       router.replace("/(tabs)");
     } catch (error: any) {
       console.error("Signup error:", error);
+      // Avoid leaking raw server error details to the user
       const errorMsg =
         error.response?.data?.message ||
         "An error occurred during sign up. Please try again.";
@@ -209,20 +257,27 @@ export default function SignUpScreen() {
     }
   };
 
-  // NEW ADDITION: Handle save from modal
+  // Save location coming back from the modal
   const handleLocationSave = (location: AppLocation) => {
     setUserLocation(location);
   };
 
+  // True whenever any async operation is running — used to disable everything
+  const isBusy = isLoading || isDetectingLocation;
+
   return (
     <SafeAreaView
       style={[styles.safeArea, { backgroundColor: theme.background }]}
+      // Only protect top — bottom is handled by ScrollView padding
+      edges={["top", "left", "right"]}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        scrollEnabled={!isLoading}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* App Logo - NO CHANGES */}
+        {/* Logo */}
         <View style={styles.logoContainer}>
           <Image
             source={require("@/assets/icons/leaflogoicon.png")}
@@ -231,7 +286,7 @@ export default function SignUpScreen() {
           />
         </View>
 
-        {/* Headers - NO CHANGES */}
+        {/* Header */}
         <Text style={[styles.title, { color: theme.primary }]}>
           Create An Account
         </Text>
@@ -239,95 +294,199 @@ export default function SignUpScreen() {
           Join CropGuardian to start your plant care journey
         </Text>
 
-        {/* Form Fields - Most unchanged, location section updated */}
+        {/* ── First Name + Last Name Row ── */}
         <View style={styles.row}>
-          <CustomInput
-            placeholder="First Name"
-            leftIcon="person-outline"
-            containerStyle={styles.halfInput}
-            value={firstName}
-            onChangeText={setFirstName}
-            editable={!isLoading && !isDetectingLocation}
-          />
-          <CustomInput
-            placeholder="Last Name"
-            leftIcon="person-outline"
-            containerStyle={styles.halfInput}
-            value={lastName}
-            onChangeText={setLastName}
-            editable={!isLoading && !isDetectingLocation}
-          />
+          {/* halfInputWrapper wraps both the input AND its error text
+              so the error always appears directly below its own field */}
+          <View style={styles.halfInputWrapper}>
+            <Controller
+              control={control}
+              name="firstName"
+              // field.onBlur is required — without passing it to the input,
+              // react-hook-form never knows the field was blurred and
+              // mode:"onBlur" validation will not fire for this field.
+              render={({ field: { onChange, onBlur, value } }) => (
+                <CustomInput
+                  placeholder="First Name"
+                  leftIcon="person-outline"
+                  containerStyle={styles.halfInput}
+                  value={value}
+                  onChangeText={(text) => {
+                    // Prevent digits from being typed into name fields entirely
+                    const lettersOnly = text.replace(/[^a-zA-Z\s'\-]/g, "");
+                    onChange(lettersOnly);
+                  }}
+                  onBlur={onBlur} // triggers validation when user leaves field
+                  editable={!isBusy}
+                  autoCapitalize="words"
+                />
+              )}
+            />
+            {errors.firstName && (
+              <Text
+                style={[styles.errorText, { color: theme.error ?? "#E53E3E" }]}
+              >
+                {errors.firstName.message}
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.halfInputWrapper}>
+            <Controller
+              control={control}
+              name="lastName"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <CustomInput
+                  placeholder="Last Name"
+                  leftIcon="person-outline"
+                  containerStyle={styles.halfInput}
+                  value={value}
+                  onChangeText={(text) => {
+                    const lettersOnly = text.replace(/[^a-zA-Z\s'\-]/g, "");
+                    onChange(lettersOnly);
+                  }}
+                  onBlur={onBlur}
+                  editable={!isBusy}
+                  autoCapitalize="words"
+                />
+              )}
+            />
+            {errors.lastName && (
+              <Text
+                style={[styles.errorText, { color: theme.error ?? "#E53E3E" }]}
+              >
+                {errors.lastName.message}
+              </Text>
+            )}
+          </View>
         </View>
 
-        {/* Other inputs - editable disabled during loading/detection */}
-        <CustomInput
-          placeholder="Email"
-          leftIcon="mail-outline"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-          editable={!isLoading && !isDetectingLocation}
+        {/* ── Email ── */}
+        <Controller
+          control={control}
+          name="email"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <View>
+              <CustomInput
+                placeholder="Email Address"
+                leftIcon="mail-outline"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                editable={!isBusy}
+              />
+              {errors.email && (
+                <Text
+                  style={[
+                    styles.errorText,
+                    { color: theme.error ?? "#E53E3E" },
+                  ]}
+                >
+                  {errors.email.message}
+                </Text>
+              )}
+            </View>
+          )}
         />
 
-        <CustomInput
-          placeholder="Phone Number (Optional)"
-          keyboardType="phone-pad"
-          value={phoneNumber}
-          onChangeText={setPhoneNumber}
-          editable={!isLoading && !isDetectingLocation}
-        />
+        {/* ── Phone Number ── */}
+        {/* Phone is optional. We show the Ghana flag + +233 prefix as a
+            visual-only prefix beside the input. The raw digits the user
+            types go into the form; formatting and prefixing happen at
+            submit time so we never store a malformed string. */}
+        <Controller
+          control={control}
+          name="phoneNumber"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <View style={styles.phoneRow}>
+              {/* ── Static Ghana country code badge ── */}
+              <View
+                style={[
+                  styles.phonePrefixBadge,
+                  {
+                    borderColor: theme.inputBorder,
+                    backgroundColor: theme.surface,
+                  },
+                ]}
+              >
+                {/* Ghana flag emoji + country code */}
+                <Text style={[styles.phonePrefixText, { color: theme.text }]}>
+                  🇬🇭 +233
+                </Text>
+              </View>
 
-        {/* Country Code - NO CHANGES */}
-        <View style={styles.countryCodeWrapper}>
+              {/* ── Actual digit input ── */}
+              <View style={styles.phoneInputFlex}>
+                <CustomInput
+                  placeholder="244 123 456 (Optional)"
+                  keyboardType="number-pad" // number-pad shows only digits on both platforms
+                  value={value}
+                  onChangeText={(text) => {
+                    // Strip any non-digit characters the user might paste in.
+                    // This is the real-time guard — the Zod refine handles
+                    // final format validation on blur.
+                    const digitsOnly = text.replace(/\D/g, "");
+                    // Cap at 10 digits (longest Ghana local format with leading 0)
+                    onChange(digitsOnly.slice(0, 10));
+                  }}
+                  onBlur={onBlur}
+                  editable={!isBusy}
+                  maxLength={10}
+                />
+              </View>
+            </View>
+          )}
+        />
+        {errors.phoneNumber && (
           <Text
             style={[
-              styles.floatingLabel,
-              { backgroundColor: theme.background, color: theme.icon },
+              styles.errorText,
+              styles.phoneError,
+              { color: theme.error ?? "#E53E3E" },
             ]}
           >
-            Country Code (Auto-detected)
+            {errors.phoneNumber.message}
           </Text>
-          <View
-            style={[
-              styles.countryCodeContainer,
-              {
-                borderColor: theme.inputBorder,
-                backgroundColor: theme.surface,
-              },
-            ]}
-          >
-            <Ionicons
-              name="globe-outline"
-              size={moderateScale(20)}
-              color={theme.icon}
-              style={styles.leftIcon}
-            />
-            <Text style={[styles.countryText, { color: theme.text }]}>GH</Text>
-            <Ionicons
-              name="checkmark-circle"
-              size={moderateScale(20)}
-              color={theme.primary}
-            />
-          </View>
-          <Text style={[styles.helperText, { color: theme.icon }]}>2/2</Text>
-        </View>
+        )}
 
-        {/* NEW ADDITION: User-friendly Location Card */}
+        {/* ── Location Card ── */}
         <View
           style={[
             styles.locationCard,
-            { backgroundColor: theme.surface, borderColor: theme.inputBorder },
+            {
+              backgroundColor: theme.surface,
+              borderColor: userLocation ? theme.primary : theme.inputBorder,
+            },
           ]}
         >
           <View style={styles.locationHeader}>
-            <Ionicons name="location-outline" size={24} color={theme.primary} />
+            <Ionicons
+              name={userLocation ? "location" : "location-outline"}
+              size={24}
+              color={userLocation ? theme.primary : theme.icon}
+            />
             <Text style={[styles.locationTitle, { color: theme.text }]}>
               Your Location
             </Text>
+            {/* Green tick once location is confirmed */}
+            {userLocation && (
+              <Ionicons
+                name="checkmark-circle"
+                size={moderateScale(18)}
+                color={theme.primary}
+              />
+            )}
           </View>
 
-          <Text style={[styles.detectedLocation, { color: theme.text }]}>
+          <Text
+            style={[
+              styles.detectedLocation,
+              { color: userLocation ? theme.text : theme.icon },
+            ]}
+          >
             {formatLocationDisplay(userLocation)}
           </Text>
 
@@ -337,17 +496,28 @@ export default function SignUpScreen() {
             </Text>
           )}
 
+          {/* Show a helper note if location has not been set yet */}
+          {!userLocation && (
+            <Text style={[styles.locationHint, { color: "#E53E3E" }]}>
+              Location is required to continue
+            </Text>
+          )}
+
           <View style={styles.locationActions}>
             <CustomButton
-              title="Detect / Update Location"
+              title={
+                isDetectingLocation
+                  ? "Detecting..."
+                  : "Detect / Update Location"
+              }
               onPress={() => detectCurrentLocation(false)}
               loading={isDetectingLocation}
-              disabled={isLoading || isDetectingLocation}
+              disabled={isBusy}
               variant="outline"
             />
             <TouchableOpacity
               onPress={() => setIsModalVisible(true)}
-              disabled={isLoading || isDetectingLocation}
+              disabled={isBusy}
               style={styles.manualEditLink}
             >
               <Text style={{ color: theme.primary, fontWeight: "600" }}>
@@ -357,28 +527,75 @@ export default function SignUpScreen() {
           </View>
         </View>
 
-        <CustomInput
-          placeholder="Password"
-          leftIcon="lock-closed-outline"
-          isPassword
-          value={password}
-          onChangeText={setPassword}
-          editable={!isLoading && !isDetectingLocation}
+        {/* ── Password ── */}
+        <Controller
+          control={control}
+          name="password"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <View>
+              <CustomInput
+                placeholder="Password"
+                leftIcon="lock-closed-outline"
+                isPassword
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                editable={!isBusy}
+              />
+              {errors.password && (
+                <Text
+                  style={[
+                    styles.errorText,
+                    { color: theme.error ?? "#E53E3E" },
+                  ]}
+                >
+                  {errors.password.message}
+                </Text>
+              )}
+              {/* Password strength hint — shown when no error and field has value */}
+              {!errors.password && value.length > 0 && value.length < 8 && (
+                <Text style={[styles.hintText, { color: theme.icon }]}>
+                  Must be at least 8 characters with uppercase, lowercase, and a
+                  number
+                </Text>
+              )}
+            </View>
+          )}
         />
 
-        <CustomInput
-          placeholder="Confirm Password"
-          leftIcon="lock-closed-outline"
-          isPassword
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          editable={!isLoading && !isDetectingLocation}
+        {/* ── Confirm Password ── */}
+        <Controller
+          control={control}
+          name="confirmPassword"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <View>
+              <CustomInput
+                placeholder="Confirm Password"
+                leftIcon="lock-closed-outline"
+                isPassword
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                editable={!isBusy}
+              />
+              {errors.confirmPassword && (
+                <Text
+                  style={[
+                    styles.errorText,
+                    { color: theme.error ?? "#E53E3E" },
+                  ]}
+                >
+                  {errors.confirmPassword.message}
+                </Text>
+              )}
+            </View>
+          )}
         />
 
-        {/* Terms - NO CHANGES */}
+        {/* ── Terms ── */}
         <View style={styles.termsContainer}>
           <Text style={[styles.termsText, { color: theme.text }]}>
-            I agree to the{" "}
+            By creating an account, you agree to our{" "}
             <Text style={[styles.linkText, { color: theme.primary }]}>
               Terms and Conditions
             </Text>{" "}
@@ -389,21 +606,32 @@ export default function SignUpScreen() {
           </Text>
         </View>
 
-        {/* Submit Button - disabled during any loading */}
+        {/* ── Submit Button ──
+            disabled unless: all required fields filled + Zod valid + location set + not loading.
+            The canSubmit boolean above centralises this logic. */}
         <CustomButton
           title="Create Account"
           loading={isLoading}
-          disabled={isLoading || isDetectingLocation || !userLocation}
-          onPress={handleSignUp}
+          disabled={!canSubmit}
+          onPress={handleSubmit(handleSignUp)}
         />
 
-        {/* Footer - NO CHANGES */}
+        {/* Small hint so the user knows WHY the button is grey */}
+        {!canSubmit && !isBusy && (
+          <Text style={[styles.submitHint, { color: theme.icon }]}>
+            {!userLocation
+              ? "Please set your location above"
+              : "Please fill in all required fields correctly"}
+          </Text>
+        )}
+
+        {/* ── Footer ── */}
         <View style={styles.footerContainer}>
           <Text style={[styles.footerText, { color: theme.icon }]}>
             Already have an account?{" "}
           </Text>
           <Link href="/login" asChild>
-            <TouchableOpacity>
+            <TouchableOpacity disabled={isBusy}>
               <Text style={[styles.footerLink, { color: theme.primary }]}>
                 Sign In
               </Text>
@@ -412,7 +640,9 @@ export default function SignUpScreen() {
         </View>
       </ScrollView>
 
-      {/* NEW ADDITION: Modal */}
+      {/* ── Location Edit Modal ──
+          Rendered outside ScrollView so it floats over the entire screen.
+          The modal itself manages its own backdrop and blur. */}
       <LocationEditModal
         isVisible={isModalVisible}
         currentLocation={userLocation}
@@ -424,16 +654,14 @@ export default function SignUpScreen() {
   );
 }
 
-// Updated styles with location card
 const styles = StyleSheet.create({
-  // ... all existing styles remain the same (NO CHANGES to previous definitions)
   safeArea: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: scale(20),
-    paddingTop: verticalScale(40),
-    paddingBottom: verticalScale(40),
+    paddingTop: verticalScale(32),
+    paddingBottom: verticalScale(48),
   },
   logoContainer: {
     alignItems: "center",
@@ -452,76 +680,65 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: moderateScale(14),
     textAlign: "center",
-    marginBottom: verticalScale(30),
+    marginBottom: verticalScale(28),
     paddingHorizontal: scale(20),
   },
+
+  // ── Name row ──
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
+    // gap between the two half-width columns
+    gap: scale(10),
+  },
+  halfInputWrapper: {
+    // Each column takes exactly half the row minus the gap
+    flex: 1,
   },
   halfInput: {
-    flex: 0.48,
+    flex: 1,
   },
-  countryCodeWrapper: {
-    marginBottom: verticalScale(16),
-    position: "relative",
+
+  // ── Error text ── appears directly below the offending field
+  errorText: {
+    fontSize: moderateScale(11),
+    marginTop: verticalScale(-10), // pull up close to the input border
+    marginBottom: verticalScale(10),
+    marginLeft: scale(4),
   },
-  floatingLabel: {
-    position: "absolute",
-    top: -verticalScale(8),
-    left: scale(12),
-    zIndex: 1,
-    paddingHorizontal: scale(4),
-    fontSize: moderateScale(10),
-  },
-  countryCodeContainer: {
+
+  // ── Phone ──
+  // The phone row lays out the +233 badge and the digit input side by side
+  phoneRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start", // align-start so the badge and input top-align
+    gap: scale(8),
+    marginBottom: verticalScale(0), // error text provides the bottom spacing
+  },
+  phonePrefixBadge: {
+    height: verticalScale(50),
     borderWidth: 1,
     borderRadius: moderateScale(8),
     paddingHorizontal: scale(12),
-    height: verticalScale(50),
-  },
-  leftIcon: {
-    marginRight: scale(10),
-  },
-  countryText: {
-    flex: 1,
-    fontSize: moderateScale(14),
-  },
-  helperText: {
-    textAlign: "right",
-    fontSize: moderateScale(10),
-    marginTop: verticalScale(4),
-  },
-  termsContainer: {
-    marginTop: verticalScale(8),
-    marginBottom: verticalScale(20),
-    paddingHorizontal: scale(20),
-  },
-  termsText: {
-    fontSize: moderateScale(12),
-    textAlign: "center",
-    lineHeight: moderateScale(18),
-  },
-  linkText: {
-    fontWeight: "600",
-    textDecorationLine: "underline",
-  },
-  footerContainer: {
-    flexDirection: "row",
     justifyContent: "center",
-    marginTop: verticalScale(20),
+    alignItems: "center",
+    // The badge is a fixed-width pill — no flex so it doesn't grow
   },
-  footerText: {
+  phonePrefixText: {
     fontSize: moderateScale(14),
+    fontWeight: "600",
   },
-  footerLink: {
-    fontSize: moderateScale(14),
-    fontWeight: "700",
+  phoneInputFlex: {
+    // Take up all remaining width after the badge
+    flex: 1,
+  },
+  phoneError: {
+    // Extra top margin to account for no marginTop pull-up (no input above it)
+    marginTop: verticalScale(-6),
+    marginBottom: verticalScale(10),
   },
 
-  // NEW ADDITION: Location card styles
+  // ── Location card ──
   locationCard: {
     borderWidth: 1,
     borderRadius: moderateScale(12),
@@ -537,21 +754,74 @@ const styles = StyleSheet.create({
   locationTitle: {
     fontSize: moderateScale(16),
     fontWeight: "600",
+    flex: 1,
   },
   detectedLocation: {
-    fontSize: moderateScale(15),
+    fontSize: moderateScale(14),
     fontWeight: "500",
     marginBottom: verticalScale(4),
   },
   accuracyText: {
     fontSize: moderateScale(12),
-    marginBottom: verticalScale(12),
+    marginBottom: verticalScale(8),
+  },
+  locationHint: {
+    fontSize: moderateScale(11),
+    marginBottom: verticalScale(8),
+    fontWeight: "500",
   },
   locationActions: {
-    gap: verticalScale(8),
+    gap: verticalScale(4),
+    marginTop: verticalScale(4),
   },
   manualEditLink: {
     paddingVertical: verticalScale(8),
     alignItems: "center",
+  },
+
+  // ── Password hint ──
+  hintText: {
+    fontSize: moderateScale(11),
+    marginTop: verticalScale(-10),
+    marginBottom: verticalScale(10),
+    marginLeft: scale(4),
+  },
+
+  // ── Terms ──
+  termsContainer: {
+    marginTop: verticalScale(4),
+    marginBottom: verticalScale(16),
+    paddingHorizontal: scale(8),
+  },
+  termsText: {
+    fontSize: moderateScale(12),
+    textAlign: "center",
+    lineHeight: moderateScale(20),
+  },
+  linkText: {
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+
+  // ── Submit hint (shown when button is disabled) ──
+  submitHint: {
+    fontSize: moderateScale(11),
+    textAlign: "center",
+    marginTop: verticalScale(-8),
+    marginBottom: verticalScale(8),
+  },
+
+  // ── Footer ──
+  footerContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: verticalScale(16),
+  },
+  footerText: {
+    fontSize: moderateScale(14),
+  },
+  footerLink: {
+    fontSize: moderateScale(14),
+    fontWeight: "700",
   },
 });

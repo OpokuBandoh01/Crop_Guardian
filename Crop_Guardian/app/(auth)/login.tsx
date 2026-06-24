@@ -1,6 +1,8 @@
-// app/(auth)/login
+// app/(auth)/login.tsx
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useRouter } from "expo-router";
 import React, { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import {
   Alert,
   Image,
@@ -15,10 +17,9 @@ import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
 import { CustomButton } from "@/components/CustomButton";
 import { CustomInput } from "@/components/CustomInput";
-import { Divider } from "@/components/Divider";
-import { SocialButton } from "@/components/SocialButton";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { LoginFormData, loginSchema } from "@/schemas/authShemas";
 import API from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -27,27 +28,35 @@ export default function LoginScreen() {
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // isLoading tracks the network request so we can disable everything
   const [isLoading, setIsLoading] = useState(false);
 
   const loginUser = useAuthStore((state) => state.login);
 
-  const handleSignIn = async () => {
-    const trimmedEmail = email.trim();
-    const trimmedPassword = password.trim();
+  // useForm wires up react-hook-form with our Zod schema.
+  // zodResolver translates Zod errors into react-hook-form's error format.
+  const {
+    control, // passes field control down to <Controller>
+    handleSubmit, // wraps our handler and prevents call if form is invalid
+    formState: { errors }, // field-level error messages from Zod
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
 
-    if (!email || !password) {
-      Alert.alert("Error", "Please fill in all fields");
-      return;
-    }
-
+  // handleSubmit only calls this if Zod validation passes
+  const handleSignIn = async (data: LoginFormData) => {
     setIsLoading(true);
     try {
-      const response = await API.post("/api/auth/login", { email, password });
-      const { token } = response.data;
+      const response = await API.post("/api/auth/login", {
+        email: data.email.trim(),
+        password: data.password,
+      });
 
-      // UPDATED: save auth data in Zustand
+      const { token } = response.data;
       loginUser(token, response.data.user);
       router.replace("/(tabs)");
     } catch (error: any) {
@@ -68,6 +77,8 @@ export default function LoginScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        // Prevent background scroll interaction while loading
+        scrollEnabled={!isLoading}
       >
         {/* App Logo */}
         <View style={styles.logoContainer}>
@@ -86,24 +97,63 @@ export default function LoginScreen() {
           Sign in to continue your plant care journey
         </Text>
 
-        {/* Form Fields */}
-        <CustomInput
-          placeholder="Email"
-          leftIcon="mail-outline"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-          editable={!isLoading}
+        {/* Email Field */}
+        {/* Controller bridges react-hook-form state with our CustomInput */}
+        <Controller
+          control={control}
+          name="email"
+          render={({ field: { onChange, value } }) => (
+            <View>
+              <CustomInput
+                placeholder="Email"
+                leftIcon="mail-outline"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={value}
+                onChangeText={onChange}
+                editable={!isLoading}
+              />
+              {/* Show Zod error message below the field */}
+              {errors.email && (
+                <Text
+                  style={[
+                    styles.errorText,
+                    { color: theme.error ?? "#E53E3E" },
+                  ]}
+                >
+                  {errors.email.message}
+                </Text>
+              )}
+            </View>
+          )}
         />
 
-        <CustomInput
-          placeholder="Password"
-          leftIcon="lock-closed-outline"
-          isPassword
-          value={password}
-          onChangeText={setPassword}
-          editable={!isLoading}
+        {/* Password Field */}
+        <Controller
+          control={control}
+          name="password"
+          render={({ field: { onChange, value } }) => (
+            <View>
+              <CustomInput
+                placeholder="Password"
+                leftIcon="lock-closed-outline"
+                isPassword
+                value={value}
+                onChangeText={onChange}
+                editable={!isLoading}
+              />
+              {errors.password && (
+                <Text
+                  style={[
+                    styles.errorText,
+                    { color: theme.error ?? "#E53E3E" },
+                  ]}
+                >
+                  {errors.password.message}
+                </Text>
+              )}
+            </View>
+          )}
         />
 
         {/* Forgot Password Link */}
@@ -118,30 +168,12 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </Link>
 
-        {/* Submit Button */}
+        {/* Submit — handleSubmit runs Zod first, then calls handleSignIn */}
         <CustomButton
           title="SIGN IN"
           loading={isLoading}
           disabled={isLoading}
-          onPress={handleSignIn}
-        />
-
-        {/* Divider */}
-        <Divider text="OR" />
-
-        {/* Social Logins */}
-        <SocialButton
-          title="Continue with Google"
-          onPress={() => console.log("Google login")}
-          iconSource={require("@/assets/icons/googleicon.png")}
-          variant="outline"
-        />
-
-        <SocialButton
-          title="Continue with Apple"
-          onPress={() => console.log("Apple login")}
-          iconName="logo-apple"
-          variant="solid"
+          onPress={handleSubmit(handleSignIn)}
         />
 
         {/* Footer Link */}
@@ -150,7 +182,7 @@ export default function LoginScreen() {
             {"Don't have an account? "}
           </Text>
           <Link href="/(onboarding)/user-role" asChild>
-            <TouchableOpacity>
+            <TouchableOpacity disabled={isLoading}>
               <Text style={[styles.footerLink, { color: theme.primary }]}>
                 Sign up!
               </Text>
@@ -193,12 +225,18 @@ const styles = StyleSheet.create({
   },
   forgotPasswordContainer: {
     alignSelf: "flex-start",
-    marginTop: verticalScale(-8),
+    marginTop: verticalScale(4),
     marginBottom: verticalScale(16),
   },
   forgotPasswordText: {
     fontSize: moderateScale(12),
     fontWeight: "500",
+  },
+  errorText: {
+    fontSize: moderateScale(11),
+    marginTop: verticalScale(-8),
+    marginBottom: verticalScale(8),
+    marginLeft: scale(4),
   },
   footerContainer: {
     flexDirection: "row",

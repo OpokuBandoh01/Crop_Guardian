@@ -1,46 +1,43 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { Redirect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// app/index.tsx
 
-export default function Index() {
-  const [loading, setLoading] = useState(true);
-  const [hasToken, setHasToken] = useState(false);
-  const [isOnboarded, setIsOnboarded] = useState(false);
+import { useRouter } from "expo-router";
+import { useEffect } from "react";
+import { ActivityIndicator, View } from "react-native";
+
+import { useAuthStore } from "@/stores/authStore";
+import { useOnboardingStore } from "@/stores/onboardingStore";
+
+export default function IndexScreen() {
+  const router = useRouter();
+
+  const hasOnboarded = useOnboardingStore((state) => state.hasOnboarded);
+  const onboardingHydrated = useOnboardingStore((state) => state.hasHydrated);
+
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const authHydrated = useAuthStore((state) => state.hasHydrated);
 
   useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        const token = await AsyncStorage.getItem('userToken');
-        setHasToken(!!token);
+    if (!onboardingHydrated || !authHydrated) return;
 
-        if (token) {
-          const cached = await AsyncStorage.getItem('userData');
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            setIsOnboarded(!!parsed.isOnboarded);
-          }
-        }
-      } catch (e) {
-        console.error('Error reading token/onboarding status:', e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    checkStatus();
-  }, []);
+    let destination: string;
+    if (isAuthenticated) {
+      destination = "/(tabs)";
+    } else if (!hasOnboarded) {
+      destination = "/(onboarding)/user-role";
+    } else {
+      destination = "/(auth)/login";
+    }
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFE7' }}>
-        <ActivityIndicator size="large" color="#094A04" />
-      </View>
-    );
-  }
+    const timer = setTimeout(() => {
+      router.replace(destination as any);
+    }, 0);
 
-  if (hasToken) {
-    return isOnboarded ? <Redirect href="/(tabs)" /> : <Redirect href="/(onboarding)/user-role" />;
-  } else {
-    return <Redirect href="/login" />;
-  }
+    return () => clearTimeout(timer);
+  }, [hasOnboarded, onboardingHydrated, isAuthenticated, authHydrated]);
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <ActivityIndicator size="large" />
+    </View>
+  );
 }

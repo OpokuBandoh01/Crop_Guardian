@@ -1,74 +1,87 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-import { Link, useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// app/(auth)/login
+import { Link, useRouter } from "expo-router";
+import React, { useState } from "react";
+import {
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { CustomInput } from '@/components/CustomInput';
-import { CustomButton } from '@/components/CustomButton';
-import { SocialButton } from '@/components/SocialButton';
-import { Divider } from '@/components/Divider';
-import API from '@/services/api';
+import { CustomButton } from "@/components/CustomButton";
+import { CustomInput } from "@/components/CustomInput";
+import { Divider } from "@/components/Divider";
+import { SocialButton } from "@/components/SocialButton";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import API from "@/services/api";
+import { useAuthStore } from "@/stores/authStore";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? 'light';
+  const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  const loginUser = useAuthStore((state) => state.login);
+
   const handleSignIn = async () => {
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert("Error", "Please fill in all fields");
       return;
     }
 
     setIsLoading(true);
     try {
-      const response = await API.post('/api/auth/login', { email, password });
+      const response = await API.post("/api/auth/login", { email, password });
       const { token } = response.data;
-      await AsyncStorage.setItem('userToken', token);
-      
-      if (response.data.user) {
-        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
-        if (response.data.user.isOnboarded) {
-          router.replace('/(tabs)');
-        } else {
-          router.replace('/(onboarding)/user-role');
-        }
-      } else {
-        router.replace('/(tabs)');
-      }
+
+      // UPDATED: save auth data in Zustand
+      loginUser(token, response.data.user);
+      router.replace("/(tabs)");
     } catch (error: any) {
-      console.error('Login error:', error);
-      const errorMsg = error.response?.data?.message || 'An error occurred during login. Please try again.';
-      Alert.alert('Login Failed', errorMsg);
+      console.error("Login error:", error);
+      const errorMsg =
+        error.response?.data?.message ||
+        "An error occurred during login. Please try again.";
+      Alert.alert("Login Failed", errorMsg);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.background }]}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* App Logo */}
         <View style={styles.logoContainer}>
-          <Image 
-            source={require('@/assets/icons/leaflogoicon.png')} 
-            style={styles.logoImage} 
-            resizeMode="contain" 
+          <Image
+            source={require("@/assets/icons/leaflogoicon.png")}
+            style={styles.logoImage}
+            resizeMode="contain"
           />
         </View>
 
         {/* Headers */}
-        <Text style={[styles.title, { color: theme.primary }]}>Welcome Back</Text>
+        <Text style={[styles.title, { color: theme.primary }]}>
+          Welcome Back
+        </Text>
         <Text style={[styles.subtitle, { color: theme.icon }]}>
           Sign in to continue your plant care journey
         </Text>
@@ -95,42 +108,55 @@ export default function LoginScreen() {
 
         {/* Forgot Password Link */}
         <Link href="/forgot-password" asChild>
-          <TouchableOpacity style={styles.forgotPasswordContainer} disabled={isLoading}>
-            <Text style={[styles.forgotPasswordText, { color: theme.icon }]}>Forgot password?</Text>
+          <TouchableOpacity
+            style={styles.forgotPasswordContainer}
+            disabled={isLoading}
+          >
+            <Text style={[styles.forgotPasswordText, { color: theme.icon }]}>
+              Forgot password?
+            </Text>
           </TouchableOpacity>
         </Link>
 
         {/* Submit Button */}
-        <CustomButton title="SIGN IN" loading={isLoading} disabled={isLoading} onPress={handleSignIn} />
+        <CustomButton
+          title="SIGN IN"
+          loading={isLoading}
+          disabled={isLoading}
+          onPress={handleSignIn}
+        />
 
         {/* Divider */}
         <Divider text="OR" />
 
         {/* Social Logins */}
-        <SocialButton 
-          title="Continue with Google" 
-          onPress={() => console.log('Google login')}
-          iconSource={require('@/assets/icons/googleicon.png')}
+        <SocialButton
+          title="Continue with Google"
+          onPress={() => console.log("Google login")}
+          iconSource={require("@/assets/icons/googleicon.png")}
           variant="outline"
         />
 
-        <SocialButton 
-          title="Continue with Apple" 
-          onPress={() => console.log('Apple login')}
+        <SocialButton
+          title="Continue with Apple"
+          onPress={() => console.log("Apple login")}
           iconName="logo-apple"
           variant="solid"
         />
 
         {/* Footer Link */}
         <View style={styles.footerContainer}>
-          <Text style={[styles.footerText, { color: theme.icon }]}>{"Don't have an account? "}</Text>
-          <Link href="/signup" asChild>
+          <Text style={[styles.footerText, { color: theme.icon }]}>
+            {"Don't have an account? "}
+          </Text>
+          <Link href="/(onboarding)/user-role" asChild>
             <TouchableOpacity>
-              <Text style={[styles.footerLink, { color: theme.primary }]}>Sign up!</Text>
+              <Text style={[styles.footerLink, { color: theme.primary }]}>
+                Sign up!
+              </Text>
             </TouchableOpacity>
           </Link>
         </View>
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -146,7 +172,7 @@ const styles = StyleSheet.create({
     paddingBottom: verticalScale(40),
   },
   logoContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: verticalScale(16),
   },
   logoImage: {
@@ -155,28 +181,28 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: moderateScale(28),
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: "700",
+    textAlign: "center",
     marginBottom: verticalScale(8),
   },
   subtitle: {
     fontSize: moderateScale(14),
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: verticalScale(40),
     paddingHorizontal: scale(20),
   },
   forgotPasswordContainer: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     marginTop: verticalScale(-8),
     marginBottom: verticalScale(16),
   },
   forgotPasswordText: {
     fontSize: moderateScale(12),
-    fontWeight: '500',
+    fontWeight: "500",
   },
   footerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     marginTop: verticalScale(20),
   },
   footerText: {
@@ -184,6 +210,6 @@ const styles = StyleSheet.create({
   },
   footerLink: {
     fontSize: moderateScale(14),
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });

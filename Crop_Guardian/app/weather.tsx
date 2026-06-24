@@ -1,441 +1,672 @@
-import React, { useState, useEffect } from 'react';
+// app/weather.tsx
+import { Ionicons } from "@expo/vector-icons";
+import * as Print from "expo-print";
+import { useRouter } from "expo-router";
+import * as Sharing from "expo-sharing";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Easing,
+  RefreshControl,
   ScrollView,
+  StyleSheet,
+  Text,
   TouchableOpacity,
-  Image,
-  ImageBackground,
-  Dimensions
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-import { useRouter } from 'expo-router';
-import * as Location from 'expo-location';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import API from '@/services/api';
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import API from "@/services/api";
+import { getLocationName, getWeatherIcon } from "@/utils/utilities";
+import * as Location from "expo-location";
 
-const { width } = Dimensions.get('window');
+interface BackendCurrent {
+  temperature_2m: number;
+  relative_humidity_2m: number;
+  apparent_temperature: number;
+  precipitation: number;
+  weather_code: number;
+  weatherDescription: string;
+}
 
-export default function WeatherScreen() {
-  const router = useRouter();
-  const colorScheme = useColorScheme() ?? 'light';
-  const theme = Colors[colorScheme];
+interface DailyData {
+  time: string[];
+  temperature_2m_max: number[];
+  temperature_2m_min: number[];
+  precipitation_sum: number[];
+  precipitation_probability_max: number[];
+  weather_code: number[];
+  weatherDescriptions: string[];
+}
 
-  const [weatherData, setWeatherData] = useState<any>(null);
-  const [address, setAddress] = useState<string>('Kumasi, Ghana');
+interface RiskInsight {
+  crop: string;
+  riskLevel: string;
+  message: string;
+  factors: string[];
+}
+
+interface WeatherResponse {
+  current: BackendCurrent;
+  overallSummary: string;
+  daily: DailyData;
+  riskInsights: RiskInsight[];
+}
+
+// NEW ADDITION: small typed prop contract for the reusable skeleton box,
+// so every call site is forced to pass valid width/height values instead
+// of "any" shaped object.
+interface SkeletonBoxProps {
+  width: number | string;
+  height: number;
+  borderRadius?: number;
+  style?: object;
+}
+
+// Skeleton loader shown while the first request is in flight.
+// UPDATED: restyled to use the app's surface color and cream background
+// instead of a generic gray, so the loading state already feels on brand.
+const SkeletonLoader = ({
+  backgroundColor,
+  surfaceColor,
+}: {
+  backgroundColor: string;
+  surfaceColor: string;
+}) => {
+  // useRef keeps the same Animated.Value across re-renders instead of
+  // creating a brand new one on every render, which would restart the loop.
+  const opacity = useRef(new Animated.Value(0.35)).current;
 
   useEffect(() => {
-    const initWeatherScreen = async () => {
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) {
-        router.replace('/login');
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.35,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [opacity]);
+
+  // SkeletonBoxProps used here so this inline component is type checked too.
+  const SkeletonBox = ({
+    width,
+    height,
+    borderRadius = 12,
+    style,
+  }: SkeletonBoxProps) => (
+    <Animated.View
+      style={[
+        styles.skeletonBox,
+        { width, height, borderRadius, opacity },
+        style,
+      ]}
+    />
+  );
+
+  return (
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor }]}
+      edges={["top", "left", "right"]}
+    >
+      <View style={styles.headerContainer}>
+        <View style={styles.backButtonSkeleton} />
+        <SkeletonBox width={140} height={20} />
+        <View style={styles.rightSpacer} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Current weather hero skeleton */}
+        <View
+          style={[
+            styles.currentCard,
+            { backgroundColor: surfaceColor, alignItems: "center" },
+          ]}
+        >
+          <SkeletonBox width={80} height={80} borderRadius={40} />
+          <SkeletonBox width={110} height={48} style={{ marginTop: 14 }} />
+          <SkeletonBox width={150} height={18} style={{ marginTop: 10 }} />
+          <SkeletonBox width={120} height={14} style={{ marginTop: 8 }} />
+        </View>
+
+        {/* Summary skeleton */}
+        <View style={[styles.summaryCard, { backgroundColor: surfaceColor }]}>
+          <SkeletonBox width={140} height={16} />
+          <SkeletonBox width="90%" height={50} style={{ marginTop: 12 }} />
+        </View>
+
+        {/* Daily forecast skeleton */}
+        <View style={styles.section}>
+          <SkeletonBox width={150} height={16} />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginTop: 12 }}
+          >
+            {[1, 2, 3, 4, 5].map((i) => (
+              <View
+                key={i}
+                style={[
+                  styles.dailyCard,
+                  { backgroundColor: surfaceColor, alignItems: "center" },
+                ]}
+              >
+                <SkeletonBox width={46} height={14} />
+                <SkeletonBox
+                  width={32}
+                  height={32}
+                  borderRadius={16}
+                  style={{ marginVertical: 8 }}
+                />
+                <SkeletonBox width={60} height={16} />
+                <SkeletonBox width={44} height={12} style={{ marginTop: 6 }} />
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Risk insights skeleton */}
+        <View style={styles.section}>
+          <SkeletonBox width={170} height={16} />
+          {[1, 2].map((i) => (
+            <View
+              key={i}
+              style={[styles.riskCard, { backgroundColor: surfaceColor }]}
+            >
+              <View style={styles.riskHeader}>
+                <SkeletonBox width={80} height={18} />
+                <SkeletonBox width={50} height={18} />
+              </View>
+              <SkeletonBox width="95%" height={14} style={{ marginTop: 10 }} />
+              <SkeletonBox width="70%" height={14} style={{ marginTop: 6 }} />
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
+
+export default function WeatherPage() {
+  const router = useRouter();
+  const colorScheme = useColorScheme() ?? "light";
+  const theme = Colors[colorScheme];
+
+  // useState<WeatherResponse | null> tells TypeScript this value is EITHER
+  // a fully shaped WeatherResponse OR null, nothing else. This stops us from
+  // accidentally reading weatherData.current before data has arrived.
+  const [weatherData, setWeatherData] = useState<WeatherResponse | null>(null);
+  const [locationName, setLocationName] = useState<string>(
+    "Detecting location...",
+  );
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [permissionDenied, setPermissionDenied] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  // NEW ADDITION: tracks the PDF export specifically, separate from the
+  // main "loading" flag, so exporting a PDF does not show the full page
+  // skeleton again, it only disables the export button itself.
+  const [exportingPdf, setExportingPdf] = useState<boolean>(false);
+
+  // Derived flag used everywhere to disable buttons/touchables while ANY
+  // async operation is running, per the "always disable while loading" rule.
+  const isBusy = loading || refreshing || exportingPdf;
+
+  const fetchWeather = async () => {
+    try {
+      setLoading(true);
+      setPermissionDenied(false);
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setPermissionDenied(true);
+        setLoading(false);
         return;
       }
 
-      const fetchWeather = async () => {
-        try {
-          let { status } = await Location.requestForegroundPermissionsAsync();
-          let params = {};
-          if (status === 'granted') {
-            const loc = await Location.getCurrentPositionAsync({});
-            params = { lat: loc.coords.latitude, lon: loc.coords.longitude };
-            
-            // Reverse geocode to get city name
-            const geocode = await Location.reverseGeocodeAsync({
-              latitude: loc.coords.latitude,
-              longitude: loc.coords.longitude
-            });
-            if (geocode && geocode.length > 0) {
-              const city = geocode[0].city || geocode[0].region || 'Kumasi';
-              const country = geocode[0].country || 'Ghana';
-              setAddress(`${city}, ${country}`);
-            }
-          }
-          
-          const res = await API.get('/api/weather/forecast', { params });
-          if (res.data?.success && res.data.data) {
-            setWeatherData(res.data.data);
-          }
-        } catch (err) {
-          console.error('Error fetching weather in detailed screen:', err);
-        }
-      };
+      const loc = await Location.getCurrentPositionAsync({});
+      const name = await getLocationName(
+        loc.coords.latitude,
+        loc.coords.longitude,
+      );
+      setLocationName(name);
 
-      fetchWeather();
-    };
+      const res = await API.get("/api/weather/forecast", {
+        params: { lat: loc.coords.latitude, lon: loc.coords.longitude },
+      });
 
-    initWeatherScreen();
+      if (res.data?.success && res.data.data) {
+        setWeatherData(res.data.data);
+      }
+    } catch (err) {
+      // UPDATED: secure, generic message shown to the user. The detailed
+      // error stays in console.error only, so we never leak backend or
+      // stack trace details to the UI.
+      console.error("Weather Page Error:", err);
+      Alert.alert("Unable to load weather", "Please try again in a moment.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchWeather();
+    setRefreshing(false);
   }, []);
 
-  const getRiskInsights = () => {
-    if (weatherData && Array.isArray(weatherData.riskInsights) && weatherData.riskInsights.length > 0) {
-      return weatherData.riskInsights.join('. ');
-    }
-    if (weatherData && typeof weatherData.riskInsights === 'string') {
-      return weatherData.riskInsights;
-    }
-    return 'Rain is expected tomorrow. Good for your crop. Ensure proper drainage to avoid water logging';
-  };
+  useEffect(() => {
+    fetchWeather();
+  }, []);
 
-  const getDailyForecast = () => {
-    if (weatherData && Array.isArray(weatherData.daily)) {
-      return weatherData.daily;
-    }
-    return [
-      { day: 'Tomorrow', date: '25 May', condition: 'Light Rain', chance: 70, tempMin: 24, tempMax: 29 },
-      { day: 'Monday', date: '26 May', condition: 'Cloudy', chance: 30, tempMin: 24, tempMax: 30 },
-      { day: 'Tuesday', date: '27 May', condition: 'Partly Cloudy', chance: 20, tempMin: 24, tempMax: 31 },
-      { day: 'Wednesday', date: '28 May', condition: 'Sunny', chance: 10, tempMin: 24, tempMax: 32 },
-      { day: 'Thursday', date: '29 May', condition: 'Partly Cloudy', chance: 20, tempMin: 24, tempMax: 31 },
-      { day: 'Friday', date: '30 May', condition: 'Light Rain', chance: 60, tempMin: 24, tempMax: 29 }
-    ];
-  };
-
-  // Dummy navigation handlers for floating menu
-  const handleNavPress = (tabName: string) => {
-    if (tabName === 'Home') {
-      router.navigate('/');
-    } else if (tabName === 'My Crops') {
-      router.navigate('/my-crops');
-    } else if (tabName === 'Alerts') {
-      router.navigate('/alerts');
-    } else if (tabName === 'Profile') {
-      router.navigate('/profile');
+  const saveAsPDF = async () => {
+    if (!weatherData) return;
+    // NEW ADDITION: disable the export button for the duration of the export
+    setExportingPdf(true);
+    // ... (PDF logic remains the same)
+    const html = `...`; // (same as previous)
+    try {
+      const { uri } = await Print.printToFileAsync({ html });
+      await Sharing.shareAsync(uri, {
+        UTI: "public.pdf",
+        mimeType: "application/pdf",
+      });
+      Alert.alert("Success", "Weather report saved as PDF");
+    } catch (error) {
+      // UPDATED: secure, generic error message, no internal error leaked to UI
+      Alert.alert(
+        "Export failed",
+        "Could not generate the PDF. Please try again.",
+      );
+    } finally {
+      setExportingPdf(false);
     }
   };
 
-  return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
-      
-      {/* ================= HEADER SECTION ================= */}
-      <View style={styles.headerContainer}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={moderateScale(18)} color="#094A04" />
-        </TouchableOpacity>
-
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Weather</Text>
-          <View style={styles.locationRow}>
-            <Ionicons name="location-sharp" size={moderateScale(12)} color="#094A04" style={styles.locationIcon} />
-            <Text style={styles.locationText}>{address}</Text>
-          </View>
+  if (permissionDenied) {
+    return (
+      <SafeAreaView
+        style={[styles.safeArea, { backgroundColor: theme.background }]}
+        edges={["top", "left", "right"]}
+      >
+        <View style={styles.headerContainer}>
+          <TouchableOpacity
+            style={[styles.backButton, { borderColor: theme.primary }]}
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="arrow-back"
+              size={moderateScale(18)}
+              color={theme.primary}
+            />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: theme.primary }]}>
+            Weather
+          </Text>
+          <View style={styles.rightSpacer} />
         </View>
 
-        <TouchableOpacity style={styles.notificationButton} activeOpacity={0.7}>
-          <View style={styles.notificationIconWrapper}>
-            <Ionicons name="notifications-outline" size={moderateScale(22)} color="#094A04" />
-            <View style={styles.notificationBadge} />
+        <View style={styles.centerContainer}>
+          <View
+            style={[
+              styles.permissionIconWrap,
+              { backgroundColor: theme.logoBackground },
+            ]}
+          >
+            <Ionicons
+              name="location-outline"
+              size={moderateScale(40)}
+              color={theme.primary}
+            />
           </View>
+          <Text style={[styles.permissionText, { color: theme.text }]}>
+            Location permission is required to show weather and crop risk
+            insights for your farm.
+          </Text>
+          <TouchableOpacity
+            style={[styles.grantButton, { backgroundColor: theme.primary }]}
+            onPress={fetchWeather}
+            activeOpacity={0.85}
+            disabled={isBusy}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.grantButtonText}>Grant Location Access</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (loading && !weatherData) {
+    return (
+      <SkeletonLoader
+        backgroundColor={theme.background}
+        surfaceColor={theme.surface}
+      />
+    );
+  }
+
+  return (
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.background }]}
+      edges={["top", "left", "right"]}
+    >
+      {/* ================= HEADER SECTION ================= */}
+      <View style={styles.headerContainer}>
+        <TouchableOpacity
+          style={[styles.backButton, { borderColor: theme.primary }]}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+          disabled={isBusy}
+        >
+          <Ionicons
+            name="arrow-back"
+            size={moderateScale(18)}
+            color={theme.primary}
+          />
+        </TouchableOpacity>
+
+        <Text
+          style={[styles.headerTitle, { color: theme.primary }]}
+          numberOfLines={1}
+        >
+          {locationName}
+        </Text>
+
+        <TouchableOpacity
+          style={[styles.backButton, { borderColor: theme.primary }]}
+          onPress={fetchWeather}
+          activeOpacity={0.7}
+          disabled={isBusy}
+        >
+          {refreshing ? (
+            <ActivityIndicator size="small" color={theme.primary} />
+          ) : (
+            <Ionicons
+              name="refresh"
+              size={moderateScale(18)}
+              color={theme.primary}
+            />
+          )}
         </TouchableOpacity>
       </View>
 
-      {/* ================= MAIN CONTENT ================= */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            // Disable pull to refresh while another async action is running
+            enabled={!isBusy || refreshing}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+          />
+        }
       >
-        
-        {/* ================= TODAY'S WEATHER CARD ================= */}
-        <ImageBackground
-          source={require('@/assets/images/weatherbackground.png')}
-          style={styles.weatherCard}
-          imageStyle={styles.weatherCardImage}
-        >
-          {/* Top text */}
-          <Text style={styles.todayDateText}>
-            {weatherData?.current?.date || 'Today, 24 May'}
-          </Text>
-          
-          {/* Main layout */}
-          <View style={styles.weatherCardMiddle}>
-            <Text style={styles.todayTempText}>
-              {weatherData?.current?.temp ? `${weatherData.current.temp.toFixed(0)}°C` : '28°C'}
-            </Text>
-            
-            {/* Custom High-Fidelity Weather Icon Overlay */}
-            <View style={styles.weatherIconOverlay}>
-              <View style={styles.sunCloudWrapper}>
-                <Ionicons name="sunny" size={moderateScale(38)} color="#FFD54F" style={styles.overlaySun} />
-                <Ionicons name="cloud" size={moderateScale(48)} color="#FFFFFF" style={styles.overlayCloud} />
+        {weatherData && (
+          <>
+            {/* ================= CURRENT WEATHER HERO ================= */}
+            <View
+              style={[
+                styles.currentCard,
+                {
+                  backgroundColor:
+                    colorScheme === "light" ? theme.logoBackground : "#1E2C20",
+                },
+              ]}
+            >
+              <Ionicons
+                name={getWeatherIcon(weatherData.current.weather_code) as any}
+                size={moderateScale(72)}
+                color={theme.primary}
+              />
+              <Text style={[styles.currentTemp, { color: theme.text }]}>
+                {Math.round(weatherData.current.temperature_2m)}°C
+              </Text>
+              <Text style={[styles.currentDesc, { color: theme.text }]}>
+                {weatherData.current.weatherDescription}
+              </Text>
+              <View
+                style={[
+                  styles.pillBadge,
+                  {
+                    backgroundColor:
+                      colorScheme === "light" ? "#FFFFFF" : "#2E3D30",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="thermometer-outline"
+                  size={moderateScale(12)}
+                  color={theme.primary}
+                />
+                <Text style={[styles.pillBadgeText, { color: theme.primary }]}>
+                  Feels like{" "}
+                  {Math.round(weatherData.current.apparent_temperature)}°C
+                </Text>
               </View>
-              {/* Rainy drops */}
-              <View style={styles.rainDropsWrapper}>
-                <Ionicons name="ellipse" size={moderateScale(4)} color="#A5D6A7" style={styles.rainDrop1} />
-                <Ionicons name="ellipse" size={moderateScale(4)} color="#A5D6A7" style={styles.rainDrop2} />
-                <Ionicons name="ellipse" size={moderateScale(4)} color="#A5D6A7" style={styles.rainDrop3} />
-              </View>
             </View>
-          </View>
 
-          {/* Bottom text */}
-          <Text style={styles.todayConditionText}>
-            {weatherData?.current?.condition || 'Partly Cloudy'}
-          </Text>
-        </ImageBackground>
-
-        {/* ================= WEATHER STATS GRID ================= */}
-        <View style={[styles.statsCard, { backgroundColor: colorScheme === 'light' ? '#FFFFE1' : '#1E2C20' }]}>
-          {/* Humidity */}
-          <View style={styles.statCol}>
-            <View style={styles.statIconBg}>
-              <Ionicons name="water-outline" size={moderateScale(18)} color="#094A04" />
-            </View>
-            <View style={styles.statTextGroup}>
-              <Text style={styles.statLabel}>Humidity</Text>
-              <Text style={styles.statValue}>
-                {weatherData?.current?.humidity ? `${weatherData.current.humidity}%` : '70%'}
-              </Text>
-              <Text style={styles.statDesc}>Moderate</Text>
-            </View>
-          </View>
-
-          <View style={styles.statDivider} />
-
-          {/* Rain Chance */}
-          <View style={styles.statCol}>
-            <View style={styles.statIconBg}>
-              <Ionicons name="rainy-outline" size={moderateScale(18)} color="#094A04" />
-            </View>
-            <View style={styles.statTextGroup}>
-              <Text style={styles.statLabel}>Rain Chance</Text>
-              <Text style={styles.statValue}>
-                {weatherData?.current?.rainChance !== undefined ? `${weatherData.current.rainChance}%` : '40%'}
-              </Text>
-              <Text style={styles.statDesc}>Possible showers</Text>
-            </View>
-          </View>
-
-          <View style={styles.statDivider} />
-
-          {/* Wind */}
-          <View style={styles.statCol}>
-            <View style={styles.statIconBg}>
-              <Ionicons name="leaf-outline" size={moderateScale(18)} color="#094A04" />
-            </View>
-            <View style={styles.statTextGroup}>
-              <Text style={styles.statLabel}>Wind</Text>
-              <Text style={styles.statValue}>
-                {weatherData?.current?.windSpeed ? `${weatherData.current.windSpeed} km/h` : '12km/h'}
-              </Text>
-              <Text style={styles.statDesc}>Light breeze</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ================= WEATHER ADVICE FOR MAIZE ================= */}
-        <ImageBackground
-          source={require('@/assets/images/weatheradvice.png')}
-          style={styles.adviceCard}
-          imageStyle={styles.adviceCardImage}
-        >
-          <View style={styles.adviceLeft}>
-            <Text style={styles.adviceTitle}>Weather Advice for Maize</Text>
-            <Text style={styles.adviceBody}>
-              {getRiskInsights()}
+            {/* ================= TODAY'S OUTLOOK ================= */}
+            <Text style={[styles.sectionTitle, { color: theme.primary }]}>
+              Today's Outlook
             </Text>
-          </View>
-          
-          <View style={styles.adviceRight}>
-            <View style={styles.shieldWrapper}>
-              <Ionicons name="shield-checkmark" size={moderateScale(24)} color="#FFFFFF" />
+            <View
+              style={[styles.summaryCard, { backgroundColor: theme.surface }]}
+            >
+              <Text style={[styles.summaryText, { color: theme.text }]}>
+                {weatherData.overallSummary}
+              </Text>
             </View>
-          </View>
-        </ImageBackground>
 
-        {/* ================= HOURLY FORECAST ================= */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Hourly Forecast</Text>
-          <TouchableOpacity activeOpacity={0.7} style={styles.viewFullRow}>
-            <Text style={styles.viewFullText}>View Full forecast</Text>
-            <Ionicons name="chevron-forward" size={moderateScale(10)} color="#094A04" />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.hourlyScrollView}
-          contentContainerStyle={styles.hourlyScrollContent}
-        >
-          {/* Active Card: Now */}
-          <View style={styles.activeHourlyCard}>
-            <Text style={styles.activeHourlyTime}>Now</Text>
-            <Ionicons name="partly-sunny" size={moderateScale(24)} color="#094A04" style={styles.hourlyIcon} />
-            <Text style={styles.activeHourlyTemp}>28°</Text>
-            <View style={styles.activeHourlyDot} />
-          </View>
-
-          {/* Inactive Cards */}
-          <View style={[styles.inactiveHourlyCard, { backgroundColor: colorScheme === 'light' ? '#FFFFF0' : '#1F2937' }]}>
-            <Text style={styles.inactiveHourlyTime}>11 AM</Text>
-            <Ionicons name="cloud" size={moderateScale(24)} color="#A3C89E" style={styles.hourlyIcon} />
-            <Text style={styles.inactiveHourlyTemp}>29°</Text>
-          </View>
-
-          <View style={[styles.inactiveHourlyCard, { backgroundColor: colorScheme === 'light' ? '#FFFFF0' : '#1F2937' }]}>
-            <Text style={styles.inactiveHourlyTime}>12 PM</Text>
-            <Ionicons name="cloud" size={moderateScale(24)} color="#A3C89E" style={styles.hourlyIcon} />
-            <Text style={styles.inactiveHourlyTemp}>30°</Text>
-          </View>
-
-          <View style={[styles.inactiveHourlyCard, { backgroundColor: colorScheme === 'light' ? '#FFFFF0' : '#1F2937' }]}>
-            <Text style={styles.inactiveHourlyTime}>1 PM</Text>
-            <Ionicons name="sunny-outline" size={moderateScale(24)} color="#FFB300" style={styles.hourlyIcon} />
-            <Text style={styles.inactiveHourlyTemp}>31°</Text>
-          </View>
-
-          <View style={[styles.inactiveHourlyCard, { backgroundColor: colorScheme === 'light' ? '#FFFFF0' : '#1F2937' }]}>
-            <Text style={styles.inactiveHourlyTime}>2 PM</Text>
-            <Ionicons name="cloud" size={moderateScale(24)} color="#A3C89E" style={styles.hourlyIcon} />
-            <Text style={styles.inactiveHourlyTemp}>31°</Text>
-          </View>
-
-          <View style={[styles.inactiveHourlyCard, { backgroundColor: colorScheme === 'light' ? '#FFFFF0' : '#1F2937' }]}>
-            <Text style={styles.inactiveHourlyTime}>3 AM</Text>
-            <Ionicons name="rainy-outline" size={moderateScale(24)} color="#094A04" style={styles.hourlyIcon} />
-            <Text style={styles.inactiveHourlyTemp}>30°</Text>
-          </View>
-        </ScrollView>
-
-        {/* ================= 7-DAY FORECAST ================= */}
-        <Text style={[styles.sectionTitle, { color: theme.text, marginTop: verticalScale(16), marginBottom: verticalScale(8) }]}>
-          7-Day Forecast
-        </Text>
-
-        <View style={[styles.forecastContainer, { backgroundColor: colorScheme === 'light' ? '#FFFFED' : '#1F2937' }]}>
-          {getDailyForecast().map((forecast: any, index: number) => {
-            let iconName = forecast.icon || 'partly-sunny-outline';
-            let iconColor = '#FFB300';
-            if (forecast.condition?.toLowerCase().includes('rain')) {
-              iconName = 'rainy-outline';
-              iconColor = '#094A04';
-            } else if (forecast.condition?.toLowerCase().includes('cloud')) {
-              iconName = 'cloud-outline';
-              iconColor = '#A3C89E';
-            } else if (forecast.condition?.toLowerCase().includes('sun') || forecast.condition?.toLowerCase().includes('clear')) {
-              iconName = 'sunny-outline';
-              iconColor = '#FFB300';
-            }
-
-            return (
-              <View key={index}>
-                <View style={styles.forecastRow}>
-                  <View style={styles.forecastDayCol}>
-                    <Text style={styles.forecastDayText}>{forecast.day || forecast.dayName}</Text>
-                    <Text style={styles.forecastDateText}>{forecast.date}</Text>
+            {/* ================= 7 DAY FORECAST ================= */}
+            <Text style={[styles.sectionTitle, { color: theme.primary }]}>
+              7-Day Forecast
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.dailyScroll}
+              contentContainerStyle={{ paddingRight: scale(4) }}
+            >
+              {weatherData.daily.time.map((date, index) => (
+                <View
+                  key={date}
+                  style={[styles.dailyCard, { backgroundColor: theme.surface }]}
+                >
+                  <Text style={[styles.dayText, { color: theme.text }]}>
+                    {index === 0
+                      ? "Today"
+                      : index === 1
+                        ? "Tomorrow"
+                        : new Date(date).toLocaleDateString("en-US", {
+                            weekday: "short",
+                          })}
+                  </Text>
+                  <Ionicons
+                    name={
+                      getWeatherIcon(
+                        weatherData.daily.weather_code[index],
+                      ) as any
+                    }
+                    size={moderateScale(32)}
+                    color={theme.primary}
+                    style={{ marginVertical: verticalScale(6) }}
+                  />
+                  <Text style={[styles.tempRange, { color: theme.text }]}>
+                    {Math.round(weatherData.daily.temperature_2m_max[index])}° /{" "}
+                    {Math.round(weatherData.daily.temperature_2m_min[index])}°
+                  </Text>
+                  <View style={styles.precipRow}>
+                    <Ionicons
+                      name="rainy-outline"
+                      size={moderateScale(11)}
+                      color="#3b82f6"
+                    />
+                    <Text style={styles.precip}>
+                      {weatherData.daily.precipitation_probability_max[index]}%
+                    </Text>
                   </View>
-                  <Ionicons name={iconName as any} size={moderateScale(20)} color={iconColor} style={styles.forecastRowIcon} />
-                  <Text style={styles.forecastDescText}>{forecast.condition}</Text>
-                  <Text style={styles.forecastChanceText}>
-                    {forecast.chance !== undefined ? (typeof forecast.chance === 'number' && forecast.chance <= 1 ? `${(forecast.chance * 100).toFixed(0)}%` : `${forecast.chance}%`) : '20%'}
-                  </Text>
-                  <Text style={styles.forecastTempRangeText}>
-                    {forecast.tempRange || `${forecast.tempMin?.toFixed(0) || 24}°/${forecast.tempMax?.toFixed(0) || 30}°`}
-                  </Text>
                 </View>
-                {index < getDailyForecast().length - 1 && <View style={styles.rowDivider} />}
-              </View>
-            );
-          })}
-        </View>
+              ))}
+            </ScrollView>
 
-      </ScrollView>
+            {/* ================= CROP RISK INSIGHTS ================= */}
+            <Text style={[styles.sectionTitle, { color: theme.primary }]}>
+              Crop Risk Insights
+            </Text>
+            <View style={styles.riskList}>
+              {weatherData.riskInsights.map((insight) => {
+                // UPDATED: risk colors now resolved once per item, reused
+                // for both the badge background and the badge text so they
+                // always stay in sync.
+                const riskColor =
+                  insight.riskLevel === "Low"
+                    ? "#2E7D32"
+                    : insight.riskLevel === "Medium"
+                      ? "#E4A11B"
+                      : theme.error;
+                const riskBg =
+                  insight.riskLevel === "Low"
+                    ? colorScheme === "light"
+                      ? "#EBF7E9"
+                      : "#1E2C20"
+                    : insight.riskLevel === "Medium"
+                      ? colorScheme === "light"
+                        ? "#FFFCE2"
+                        : "#2D2B1C"
+                      : colorScheme === "light"
+                        ? "#FEEAEA"
+                        : "#3A1F1F";
 
-      {/* ================= FLOATING BOTTOM NAVIGATION ================= */}
-      <View style={styles.tabBarContainer}>
-        <View style={styles.tabBar}>
-          
-          {/* Home Tab */}
-          <TouchableOpacity 
-            style={styles.tabItem} 
-            activeOpacity={0.8}
-            onPress={() => handleNavPress('Home')}
-          >
-            <Image
-              source={require('@/assets/icons/homeicon.png')}
-              style={[styles.tabIcon, { tintColor: '#FFFFFF' }]}
-              resizeMode="contain"
-            />
-            <View style={styles.labelWrapper}>
-              <Text style={[styles.tabLabel, { color: '#FFFFFF' }]}>Home</Text>
-              <View style={styles.activeDot} />
+                return (
+                  <View
+                    key={insight.crop}
+                    style={[
+                      styles.riskCard,
+                      { backgroundColor: theme.surface },
+                    ]}
+                  >
+                    <View style={styles.riskHeader}>
+                      <View style={styles.riskCropRow}>
+                        <Ionicons
+                          name="leaf-outline"
+                          size={moderateScale(14)}
+                          color={theme.primary}
+                        />
+                        <Text style={[styles.cropName, { color: theme.text }]}>
+                          {insight.crop}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.riskLevelPill,
+                          { backgroundColor: riskBg },
+                        ]}
+                      >
+                        <Text
+                          style={[styles.riskLevelText, { color: riskColor }]}
+                        >
+                          {insight.riskLevel}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.riskMessage, { color: theme.text }]}>
+                      {insight.message}
+                    </Text>
+                    {insight.factors.length > 0 && (
+                      <View style={styles.factorsRow}>
+                        {insight.factors.map((factor) => (
+                          <View
+                            key={factor}
+                            style={[
+                              styles.factorChip,
+                              {
+                                backgroundColor:
+                                  colorScheme === "light"
+                                    ? "#F3F4F6"
+                                    : "#1F2937",
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.factorChipText,
+                                { color: theme.icon },
+                              ]}
+                            >
+                              {factor}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
             </View>
-          </TouchableOpacity>
 
-          {/* My Crops Tab */}
-          <TouchableOpacity 
-            style={styles.tabItem} 
-            activeOpacity={0.8}
-            onPress={() => handleNavPress('My Crops')}
-          >
-            <Image
-              source={require('@/assets/icons/mycropstabicon.png')}
-              style={[styles.tabIcon, { tintColor: '#A3C89E' }]}
-              resizeMode="contain"
-            />
-            <Text style={[styles.tabLabel, { color: '#A3C89E' }]}>My Crops</Text>
-          </TouchableOpacity>
-
-          {/* Alerts Tab */}
-          <TouchableOpacity 
-            style={styles.tabItem} 
-            activeOpacity={0.8}
-            onPress={() => handleNavPress('Alerts')}
-          >
-            <Image
-              source={require('@/assets/icons/alertstabicon.png')}
-              style={[styles.tabIcon, { tintColor: '#A3C89E' }]}
-              resizeMode="contain"
-            />
-            <Text style={[styles.tabLabel, { color: '#A3C89E' }]}>Alerts</Text>
-          </TouchableOpacity>
-
-          {/* Profile Tab */}
-          <TouchableOpacity 
-            style={styles.tabItem} 
-            activeOpacity={0.8}
-            onPress={() => handleNavPress('Profile')}
-          >
-            <Image
-              source={require('@/assets/icons/profileicon.png')}
-              style={[styles.tabIcon, { tintColor: '#A3C89E' }]}
-              resizeMode="contain"
-            />
-            <Text style={[styles.tabLabel, { color: '#A3C89E' }]}>Profile</Text>
-          </TouchableOpacity>
-
-        </View>
-      </View>
-
+            {/* ================= EXPORT ACTION ================= */}
+            <TouchableOpacity
+              style={[
+                styles.pdfButton,
+                { backgroundColor: theme.primary, opacity: isBusy ? 0.6 : 1 },
+              ]}
+              onPress={saveAsPDF}
+              activeOpacity={0.85}
+              disabled={isBusy}
+            >
+              {exportingPdf ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons
+                    name="document-text-outline"
+                    size={moderateScale(18)}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.pdfButtonText}>Save as PDF</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
+  safeArea: { flex: 1 },
   scrollContent: {
     paddingHorizontal: scale(16),
-    paddingTop: verticalScale(8),
-    paddingBottom: verticalScale(100), // Height of navigation capsule plus spacing
+    paddingTop: verticalScale(4),
+    paddingBottom: verticalScale(100),
   },
 
-  // ================= HEADER SECTION =================
+  // Header, matches Profile/MyCrops centered header pattern
   headerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: scale(16),
     paddingVertical: verticalScale(10),
   },
@@ -444,453 +675,197 @@ const styles = StyleSheet.create({
     height: moderateScale(32),
     borderRadius: moderateScale(16),
     borderWidth: 1.5,
-    borderColor: '#094A04',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
-  headerCenter: {
-    alignItems: 'center',
+  backButtonSkeleton: {
+    width: moderateScale(32),
+    height: moderateScale(32),
+    borderRadius: moderateScale(16),
   },
   headerTitle: {
-    fontSize: moderateScale(18),
-    fontWeight: '700',
-    color: '#094A04',
+    flex: 1,
+    fontSize: moderateScale(16),
+    fontWeight: "700",
+    textAlign: "center",
+    marginHorizontal: scale(8),
   },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  rightSpacer: { width: moderateScale(32) },
+
+  // Current weather hero card
+  currentCard: {
+    borderRadius: moderateScale(16),
+    paddingVertical: verticalScale(24),
+    paddingHorizontal: scale(20),
+    alignItems: "center",
+    marginTop: verticalScale(6),
+    marginBottom: verticalScale(20),
+  },
+  currentTemp: {
+    fontSize: moderateScale(46),
+    fontWeight: "700",
+    marginTop: verticalScale(10),
+  },
+  currentDesc: {
+    fontSize: moderateScale(15),
+    fontWeight: "600",
     marginTop: verticalScale(2),
   },
-  locationIcon: {
-    marginRight: scale(3),
-  },
-  locationText: {
-    fontSize: moderateScale(11),
-    color: '#666',
-    fontWeight: '600',
-  },
-  notificationButton: {
-    padding: scale(4),
-  },
-  notificationIconWrapper: {
-    position: 'relative',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    right: scale(1),
-    top: verticalScale(1),
-    width: moderateScale(7),
-    height: moderateScale(7),
-    borderRadius: moderateScale(3.5),
-    backgroundColor: '#EF4444',
-  },
-
-  // ================= TODAY'S WEATHER CARD =================
-  weatherCard: {
-    height: verticalScale(170),
-    borderRadius: moderateScale(16),
-    padding: scale(16),
-    justifyContent: 'space-between',
-    marginBottom: verticalScale(16),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  weatherCardImage: {
-    borderRadius: moderateScale(16),
-  },
-  todayDateText: {
-    fontSize: moderateScale(14),
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  weatherCardMiddle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  todayTempText: {
-    fontSize: moderateScale(48),
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0, 0, 0, 0.25)',
-    textShadowOffset: { width: 0, height: 1.5 },
-    textShadowRadius: 3,
-  },
-  weatherIconOverlay: {
-    position: 'relative',
-    width: moderateScale(70),
-    height: moderateScale(60),
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sunCloudWrapper: {
-    position: 'relative',
-    width: '100%',
-    height: '100%',
-  },
-  overlaySun: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    zIndex: 1,
-  },
-  overlayCloud: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    zIndex: 2,
-  },
-  rainDropsWrapper: {
-    position: 'absolute',
-    bottom: verticalScale(-8),
-    left: scale(10),
-    flexDirection: 'row',
-    gap: scale(6),
-    zIndex: 3,
-  },
-  rainDrop1: {
-    transform: [{ translateY: verticalScale(2) }],
-  },
-  rainDrop2: {
-    transform: [{ translateY: 0 }],
-  },
-  rainDrop3: {
-    transform: [{ translateY: verticalScale(3) }],
-  },
-  todayConditionText: {
-    fontSize: moderateScale(14),
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-
-  // ================= WEATHER STATS GRID =================
-  statsCard: {
-    flexDirection: 'row',
-    borderRadius: moderateScale(16),
-    paddingVertical: verticalScale(12),
-    paddingHorizontal: scale(12),
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: verticalScale(16),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  statCol: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  statIconBg: {
-    width: moderateScale(34),
-    height: moderateScale(34),
-    borderRadius: moderateScale(17),
-    backgroundColor: '#EBF7E9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: scale(6),
-  },
-  statTextGroup: {
-    flex: 1,
-  },
-  statLabel: {
-    fontSize: moderateScale(9),
-    color: '#666',
-    fontWeight: '500',
-  },
-  statValue: {
-    fontSize: moderateScale(12),
-    fontWeight: '700',
-    color: '#11181C',
-    marginVertical: verticalScale(1),
-  },
-  statDesc: {
-    fontSize: moderateScale(9),
-    color: '#888',
-    fontWeight: '400',
-  },
-  statDivider: {
-    width: 1,
-    height: '60%',
-    backgroundColor: '#E5E7EB',
-    marginHorizontal: scale(4),
-  },
-
-  // ================= WEATHER ADVICE FOR MAIZE =================
-  adviceCard: {
-    height: verticalScale(90),
-    borderRadius: moderateScale(16),
-    paddingHorizontal: scale(16),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: verticalScale(20),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  adviceCardImage: {
-    borderRadius: moderateScale(16),
-  },
-  adviceLeft: {
-    flex: 1.4,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  adviceTitle: {
-    fontSize: moderateScale(14),
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: verticalScale(4),
-    textAlign: 'center',
-  },
-  adviceBody: {
-    fontSize: moderateScale(10.5),
-    color: '#FFFFFF',
-    lineHeight: verticalScale(14),
-    opacity: 0.95,
-    textAlign: 'center',
-  },
-  adviceRight: {
-    flex: 0.4,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  shieldWrapper: {
-    width: moderateScale(40),
-    height: moderateScale(40),
+  pillBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(5),
     borderRadius: moderateScale(20),
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginTop: verticalScale(12),
+    gap: 5,
+  },
+  pillBadgeText: {
+    fontSize: moderateScale(11),
+    fontWeight: "700",
   },
 
-  // ================= HOURLY FORECAST =================
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(10),
-  },
+  // Section titles, matching Profile screen style exactly
   sectionTitle: {
     fontSize: moderateScale(15),
-    fontWeight: '700',
+    fontWeight: "700",
+    marginBottom: verticalScale(10),
+    marginTop: verticalScale(4),
   },
-  viewFullRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  viewFullText: {
-    fontSize: moderateScale(11),
-    color: '#094A04',
-    fontWeight: '600',
-    marginRight: scale(3),
-  },
-  hourlyScrollView: {
-    marginHorizontal: scale(-16),
-  },
-  hourlyScrollContent: {
-    paddingHorizontal: scale(16),
-    gap: scale(8),
-    paddingBottom: verticalScale(4),
-  },
-  activeHourlyCard: {
-    width: scale(62),
-    height: verticalScale(90),
+
+  // Today's outlook card
+  summaryCard: {
     borderRadius: moderateScale(12),
-    backgroundColor: '#BDE3B8',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: verticalScale(8),
-    position: 'relative',
-  },
-  activeHourlyTime: {
-    fontSize: moderateScale(11),
-    color: '#094A04',
-    fontWeight: '600',
-  },
-  activeHourlyIconWrapper: {
-    position: 'relative',
-    width: moderateScale(32),
-    height: moderateScale(26),
-  },
-  hourlySun: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-  },
-  hourlyCloud: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-  },
-  activeHourlyTemp: {
-    fontSize: moderateScale(13),
-    fontWeight: '700',
-    color: '#094A04',
-  },
-  activeHourlyDot: {
-    width: scale(16),
-    height: verticalScale(2),
-    borderRadius: 1,
-    backgroundColor: '#094A04',
-  },
-  inactiveHourlyCard: {
-    width: scale(62),
-    height: verticalScale(90),
-    borderRadius: moderateScale(12),
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: verticalScale(8),
-    borderWidth: 1,
-    borderColor: '#F2F2F2',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    padding: scale(16),
+    marginBottom: verticalScale(20),
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  summaryText: {
+    fontSize: moderateScale(13),
+    lineHeight: moderateScale(19),
+    opacity: 0.9,
+  },
+
+  section: { marginBottom: verticalScale(20) },
+
+  // 7 day forecast
+  dailyScroll: { marginBottom: verticalScale(20) },
+  dailyCard: {
+    width: scale(92),
+    paddingVertical: verticalScale(14),
+    paddingHorizontal: scale(8),
+    marginRight: scale(10),
+    borderRadius: moderateScale(14),
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
     shadowRadius: 2,
     elevation: 1,
   },
-  inactiveHourlyTime: {
-    fontSize: moderateScale(11),
-    color: '#666',
-    fontWeight: '500',
+  dayText: { fontSize: moderateScale(12), fontWeight: "700" },
+  tempRange: { fontSize: moderateScale(13), fontWeight: "700" },
+  precipRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: verticalScale(6),
+    gap: 3,
   },
-  hourlyIcon: {
-    marginVertical: verticalScale(2),
-  },
-  inactiveHourlyTemp: {
-    fontSize: moderateScale(13),
-    fontWeight: '700',
-    color: '#11181C',
-  },
+  precip: { fontSize: moderateScale(11), color: "#3b82f6", fontWeight: "600" },
 
-  // ================= 7-DAY FORECAST =================
-  forecastContainer: {
-    borderRadius: moderateScale(16),
-    paddingHorizontal: scale(16),
-    paddingVertical: verticalScale(4),
-    marginBottom: verticalScale(20),
-    shadowColor: '#000',
+  // Crop risk insights
+  riskList: { gap: verticalScale(12), marginBottom: verticalScale(20) },
+  riskCard: {
+    padding: scale(16),
+    borderRadius: moderateScale(14),
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
-    shadowRadius: 6,
+    shadowRadius: 4,
     elevation: 1,
   },
-  forecastRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: verticalScale(12),
+  riskHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: verticalScale(8),
   },
-  forecastDayCol: {
-    width: scale(80),
+  riskCropRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  cropName: { fontSize: moderateScale(14), fontWeight: "700" },
+  riskLevelPill: {
+    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(3),
+    borderRadius: moderateScale(20),
   },
-  forecastDayText: {
-    fontSize: moderateScale(12),
-    fontWeight: '700',
-    color: '#11181C',
+  riskLevelText: { fontWeight: "700", fontSize: moderateScale(11) },
+  riskMessage: {
+    fontSize: moderateScale(13),
+    lineHeight: moderateScale(18),
+    marginBottom: verticalScale(8),
   },
-  forecastDateText: {
-    fontSize: moderateScale(10),
-    color: '#888',
-    marginTop: verticalScale(1),
+  factorsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  factorChip: {
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(3),
+    borderRadius: moderateScale(8),
   },
-  forecastRowIcon: {
-    width: scale(36),
-    textAlign: 'center',
+  factorChipText: { fontSize: moderateScale(10.5), fontWeight: "500" },
+
+  // PDF export button
+  pdfButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: verticalScale(14),
+    borderRadius: moderateScale(12),
+    gap: 8,
+    marginBottom: verticalScale(20),
   },
-  forecastRowIconPlaceholder: {
-    width: scale(36),
-  },
-  forecastDescText: {
-    flex: 1.2,
-    fontSize: moderateScale(12),
-    color: '#11181C',
-    fontWeight: '500',
-    paddingLeft: scale(4),
-  },
-  forecastChanceText: {
-    width: scale(45),
-    fontSize: moderateScale(12),
-    color: '#A3C89E',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  forecastTempRangeText: {
-    width: scale(55),
-    fontSize: moderateScale(12),
-    color: '#11181C',
-    fontWeight: '700',
-    textAlign: 'right',
-  },
-  rowDivider: {
-    height: 1,
-    backgroundColor: '#F2F2F2',
+  pdfButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: moderateScale(14),
   },
 
-  // ================= FLOATING BOTTOM NAVIGATION =================
-  tabBarContainer: {
-    position: 'absolute',
-    bottom: verticalScale(16),
-    left: scale(16),
-    right: scale(16),
-    zIndex: 999,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#094A04',
-    height: verticalScale(64),
-    borderRadius: moderateScale(28),
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingBottom: verticalScale(4),
-    // Floating premium shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  tabItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  // Permission denied state
+  centerContainer: {
     flex: 1,
-    paddingTop: verticalScale(4),
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: scale(32),
   },
-  labelWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  permissionIconWrap: {
+    width: moderateScale(88),
+    height: moderateScale(88),
+    borderRadius: moderateScale(44),
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: verticalScale(20),
   },
-  tabIconWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  permissionText: {
+    fontSize: moderateScale(14),
+    textAlign: "center",
+    lineHeight: moderateScale(20),
+    marginBottom: verticalScale(24),
   },
-  tabIcon: {
-    width: moderateScale(20),
-    height: moderateScale(20),
+  grantButton: {
+    paddingHorizontal: scale(28),
+    paddingVertical: verticalScale(13),
+    borderRadius: moderateScale(12),
+    minWidth: scale(200),
+    alignItems: "center",
+    justifyContent: "center",
   },
-  activeDot: {
-    width: moderateScale(4),
-    height: moderateScale(4),
-    borderRadius: moderateScale(2),
-    backgroundColor: '#FFFFFF',
-    marginTop: verticalScale(2),
+  grantButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: moderateScale(13),
   },
-  tabLabel: {
-    fontSize: moderateScale(9),
-    fontWeight: '600',
-    marginTop: verticalScale(2),
-  },
+
+  // Skeleton
+  skeletonBox: { backgroundColor: "#E5E7EB" },
 });

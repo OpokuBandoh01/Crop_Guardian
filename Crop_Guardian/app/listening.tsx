@@ -1,57 +1,90 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+// app/listening.tsx
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React from "react";
+import {
+  Dimensions,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 export default function ListeningScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? 'light';
+  const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
-  const { diseaseName, recommendations } = useLocalSearchParams<{ diseaseName?: string; recommendations?: string }>();
+  const { diseaseName, recommendations } = useLocalSearchParams<{
+    diseaseName?: string;
+    recommendations?: string;
+  }>();
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.background }]}
+    >
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back-circle-outline" size={moderateScale(32)} color={theme.primary} />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
+          <Ionicons
+            name="arrow-back-circle-outline"
+            size={moderateScale(32)}
+            color={theme.primary}
+          />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.primary }]}>Listening(Twi)</Text>
+        <Text style={[styles.headerTitle, { color: theme.primary }]}>
+          Listening(Twi)
+        </Text>
         <View style={styles.rightSpacer} />
       </View>
 
       <View style={styles.content}>
         {/* Large Volume Icon */}
         <View style={styles.iconContainer}>
-          <Ionicons name="volume-high" size={moderateScale(100)} color={theme.primary} />
+          <Ionicons
+            name="volume-high"
+            size={moderateScale(100)}
+            color={theme.primary}
+          />
         </View>
 
         {/* Text content */}
         <Text style={[styles.textContent, { color: theme.text }]}>
-          {diseaseName ? (
-            `${diseaseName} detected.\n\n${recommendations}`
-          ) : (
-            `Maize leaf blight disease\ndetected. Remove the\naffected leaves. Apply\nrecommended fungicide.\nEnsure good ventilation and\navoid overhead watering.`
-          )}
+          {diseaseName
+            ? `${diseaseName} detected.\n\n${recommendations}`
+            : `Maize leaf blight disease\ndetected. Remove the\naffected leaves. Apply\nrecommended fungicide.\nEnsure good ventilation and\navoid overhead watering.`}
         </Text>
 
         {/* Progress bar */}
         <View style={styles.progressContainer}>
-          <View style={[styles.progressBarFilled, { backgroundColor: theme.primary }]} />
+          <View
+            style={[
+              styles.progressBarFilled,
+              { backgroundColor: theme.primary },
+            ]}
+          />
           <View style={styles.progressBarUnfilled} />
         </View>
       </View>
 
       {/* Stop Button */}
       <View style={styles.bottomContainer}>
-        <TouchableOpacity style={[styles.stopButton, { borderColor: theme.primary }]} onPress={() => router.back()}>
-          <Text style={[styles.stopButtonText, { color: theme.primary }]}>Stop</Text>
+        <TouchableOpacity
+          style={[styles.stopButton, { borderColor: theme.primary }]}
+          onPress={() => router.back()}
+        >
+          <Text style={[styles.stopButtonText, { color: theme.primary }]}>
+            Stop
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -63,9 +96,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: scale(16),
     paddingTop: verticalScale(16),
     paddingBottom: verticalScale(24),
@@ -75,14 +108,14 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: moderateScale(22),
-    fontWeight: '700',
+    fontWeight: "700",
   },
   rightSpacer: {
     width: moderateScale(40),
   },
   content: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: "center",
     paddingHorizontal: scale(24),
     marginTop: verticalScale(40),
   },
@@ -92,30 +125,30 @@ const styles = StyleSheet.create({
   textContent: {
     fontSize: moderateScale(16),
     lineHeight: moderateScale(28),
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: verticalScale(60),
-    fontWeight: '400',
+    fontWeight: "400",
   },
   progressContainer: {
-    width: '100%',
+    width: "100%",
     height: moderateScale(6),
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 'auto',
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: "auto",
     marginBottom: verticalScale(60),
   },
   progressBarFilled: {
-    height: '100%',
-    width: '60%', // 60% progress representation
+    height: "100%",
+    width: "60%", // 60% progress representation
     borderTopLeftRadius: moderateScale(3),
     borderBottomLeftRadius: moderateScale(3),
   },
   progressBarUnfilled: {
-    height: '100%',
+    height: "100%",
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: '#D1D5DB', // light gray border
+    borderColor: "#D1D5DB", // light gray border
     borderLeftWidth: 0,
     borderTopRightRadius: moderateScale(3),
     borderBottomRightRadius: moderateScale(3),
@@ -125,15 +158,15 @@ const styles = StyleSheet.create({
     paddingBottom: verticalScale(40),
   },
   stopButton: {
-    width: '100%',
+    width: "100%",
     borderWidth: 1,
     borderRadius: moderateScale(16),
     paddingVertical: verticalScale(16),
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   stopButtonText: {
     fontSize: moderateScale(16),
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });

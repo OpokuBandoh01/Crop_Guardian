@@ -1,35 +1,119 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
-import { Colors } from '@/constants/theme';
+// app/result.tsx
 
-const { width } = Dimensions.get('window');
+import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Modal, //  for the suggest-crop modal
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
+
+//  BlurView for modal backdrop blur
+import { BlurView } from "expo-blur";
+
+import API from "@/services/api";
+import { useAuthStore } from "@/stores/authStore";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+
+// TypeScript: describe the shape of the suggestAddToMyCrops object
+// so TypeScript can validate every access to its properties.
+interface SuggestCrop {
+  suggested: boolean;
+  cropType: string;
+  message: string;
+}
 
 export default function ResultScreen() {
   const router = useRouter();
   const { data } = useLocalSearchParams<{ data?: string }>();
-  
+
+  const user = useAuthStore((state) => state.user);
+  const refreshUser = useAuthStore((state) => state.refreshUser);
+
+  console.log("language", user?.language);
+
+  // TypeScript: scanResult is typed as any because the backend response
+  // shape may grow over time — strict typing is handled via SuggestCrop below.
   let scanResult: any = null;
   if (data) {
     try {
       scanResult = JSON.parse(data);
     } catch (e) {
-      console.error('Error parsing result data:', e);
+      console.error("Error parsing result data:", e);
     }
   }
 
-  // Hardcoded colors for this specific dark theme screen
-  const backgroundColor = '#083D04'; // A deep dark green
-  const cardColor = 'rgba(255, 255, 255, 0.1)'; // Translucent overlay for cards
-  const redColor = '#FF4D4D';
-  const brightGreenColor = '#4ADE80';
+  const backgroundColor = "#083D04";
+  const cardColor = "rgba(255, 255, 255, 0.1)";
+  const redColor = "#FF4D4D";
+  const brightGreenColor = "#4ADE80";
 
+  // -- TTS state (NO CHANGES) --
+  const [isTtsLoading, setIsTtsLoading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const player = useAudioPlayer();
+  const status = useAudioPlayerStatus(player);
+  const isMounted = useRef(true);
+
+  // --  Suggest-crop modal state --
+  // showSuggestModal: controls modal visibility
+  // isAddingCrop: true while the POST /api/crops/my-crops call is in flight
+  // addCropSuccess: true once the crop was added successfully
+  // addCropError: holds an error message string if the call fails
+  const [showSuggestModal, setShowSuggestModal] = useState(false);
+  const [isAddingCrop, setIsAddingCrop] = useState(false);
+  const [addCropSuccess, setAddCropSuccess] = useState(false);
+  const [addCropError, setAddCropError] = useState<string | null>(null);
+
+  // TypeScript: cast the suggest object through our SuggestCrop interface
+  // so downstream code gets proper type checking.
+  const suggestPayload: SuggestCrop | null =
+    scanResult?.suggestAddToMyCrops ?? null;
+
+  useEffect(() => {
+    refreshUser();
+  }, [refreshUser]);
+
+  useEffect(() => {
+    setIsPlaying(status.playing || false);
+  }, [status.playing]);
+
+  //  Auto-open the modal when the screen mounts if the backend
+  // returned suggested === true. We use a short delay (300ms) so the result
+  // screen has time to finish rendering before the modal appears -- this feels
+  // more natural to the user than an instant pop-up.
+  useEffect(() => {
+    if (suggestPayload?.suggested === true) {
+      const timer = setTimeout(() => {
+        setShowSuggestModal(true);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [suggestPayload?.suggested]);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+      try {
+        player.pause();
+      } catch (e) {
+        console.log("Audio cleanup completed (expected on unmount)");
+      }
+    };
+  }, [player]);
+
+  //  formatting/action helpers
   const formatConfidence = (conf: any) => {
-    if (conf === undefined || conf === null) return '92%';
+    if (conf === undefined || conf === null) return "92%";
     const val = Number(conf);
     if (isNaN(val)) return String(conf);
     if (val <= 1) return `${(val * 100).toFixed(0)}%`;
@@ -39,162 +123,459 @@ export default function ResultScreen() {
   const getActions = () => {
     if (!scanResult) {
       return [
-        'Remove affected leaves',
-        'Apply recommended fungicide',
-        'Ensure good ventilation',
-        'Avoid overhead watering'
+        "Remove affected leaves",
+        "Apply recommended fungicide",
+        "Ensure good ventilation",
+        "Avoid overhead watering",
       ];
     }
     const actions: string[] = [];
-    if (scanResult.organicTreatments) actions.push(`Organic: ${scanResult.organicTreatments}`);
-    if (scanResult.chemicalOptions) actions.push(`Chemical: ${scanResult.chemicalOptions}`);
-    if (scanResult.prevention) actions.push(`Prevention: ${scanResult.prevention}`);
-    return actions.length > 0 ? actions : ['No recommendations provided.'];
+    if (scanResult.organicTreatments)
+      actions.push(`Organic: ${scanResult.organicTreatments}`);
+    if (scanResult.chemicalOptions)
+      actions.push(`Chemical: ${scanResult.chemicalOptions}`);
+    if (scanResult.prevention)
+      actions.push(`Prevention: ${scanResult.prevention}`);
+    return actions.length > 0 ? actions : ["No recommendations provided."];
   };
 
   const handleListen = () => {
     router.push({
-      pathname: '/listening',
+      pathname: "/listening",
       params: {
-        diseaseName: scanResult?.diseaseName || 'Septoria',
-        recommendations: getActions().join(' ')
-      }
+        diseaseName: scanResult?.diseaseName || "Unknown",
+        recommendations: getActions().join(" "),
+      },
     });
   };
 
+  //  TTS logic
+  const toggleTts = async () => {
+    if (!scanResult) return;
+
+    const descriptionText =
+      scanResult.symptoms ||
+      scanResult.causes ||
+      "No detailed description available for this detection.";
+
+    if (isPlaying) {
+      player.pause();
+      return;
+    }
+
+    setIsTtsLoading(true);
+    try {
+      const response = await API.post("api/tts/generate", {
+        text: descriptionText,
+        language: "tw",
+      });
+
+      if (
+        response.data.success &&
+        response.data.audioBase64 &&
+        isMounted.current
+      ) {
+        const audioUri = `data:audio/wav;base64,${response.data.audioBase64}`;
+        player.replace(audioUri);
+        await player.play();
+      } else {
+        console.error("TTS failed:", response.data.message);
+      }
+    } catch (error) {
+      console.error("TTS Error:", error);
+    } finally {
+      if (isMounted.current) {
+        setIsTtsLoading(false);
+      }
+    }
+  };
+
+  //  Calls POST /api/crops/my-crops with the cropType from
+  // the backend suggest payload. All interactive elements in the modal are
+  // disabled while this is in-flight (isAddingCrop === true).
+  const handleAddToCrops = async () => {
+    if (!suggestPayload?.cropType) return;
+
+    setIsAddingCrop(true);
+    setAddCropError(null);
+
+    try {
+      const response = await API.post("/api/crops/my-crops", {
+        cropType: suggestPayload.cropType,
+      });
+
+      if (response.data?.success) {
+        setAddCropSuccess(true);
+      } else {
+        // Backend returned a non-success without throwing -- treat as error
+        setAddCropError(
+          response.data?.message || "Could not add crop. Please try again.",
+        );
+      }
+    } catch (error: any) {
+      // TypeScript: error is typed as any because Axios errors don't have a
+      // fixed shape at compile time; we narrow to the .response path manually.
+      const serverMessage = error?.response?.data?.message;
+      setAddCropError(
+        serverMessage || "Something went wrong. Please try again.",
+      );
+    } finally {
+      setIsAddingCrop(false);
+    }
+  };
+
+  //  Dismiss modal and reset all modal-specific state so it
+  // starts fresh if somehow re-opened in the same session.
+  const handleDismissModal = () => {
+    if (isAddingCrop) return; // Block dismiss while a request is in-flight
+    setShowSuggestModal(false);
+    setAddCropSuccess(false);
+    setAddCropError(null);
+  };
+
   return (
+    // TypeScript: SafeAreaView accepts a standard ViewStyle, backgroundColor
+    // is a valid string here because React Native accepts any CSS color string.
     <SafeAreaView style={[styles.safeArea, { backgroundColor }]}>
-      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        
+      {/*
+         Suggest-crop modal
+        ---------------------------------
+        - transparent={true} keeps the native Modal container clear so our
+          BlurView fills the full screen as the backdrop.
+        - animationType="fade" gives a smooth entrance instead of a slide
+          which would feel jarring right after seeing results.
+        - statusBarTranslucent lets the blur extend behind the status bar on
+          Android so the overlay truly covers the whole screen.
+        - All buttons and inputs inside are disabled when isAddingCrop is true.
+      */}
+      <Modal
+        visible={showSuggestModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={handleDismissModal}
+      >
+        {/* BlurView fills the whole screen and acts as the dimmed backdrop.
+            intensity 55 gives a strong enough blur to push the background into
+            the periphery without making it invisible. */}
+        <BlurView intensity={55} tint="dark" style={styles.modalBackdrop}>
+          {/* Tapping the backdrop area (outside the card) dismisses the modal,
+              but only when no request is in-flight. */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={handleDismissModal}
+            disabled={isAddingCrop}
+          />
+
+          {/* Modal card -- sits on top of the blur backdrop */}
+          <View style={styles.modalCard}>
+            {/* Icon at the top of the card */}
+            <View style={styles.modalIconWrapper}>
+              <Ionicons
+                name={addCropSuccess ? "checkmark-circle" : "leaf"}
+                size={moderateScale(40)}
+                color={addCropSuccess ? "#4ADE80" : "#094A04"}
+              />
+            </View>
+
+            {addCropSuccess ? (
+              /*
+                SUCCESS STATE: shown after the crop was added.
+                Displays a confirmation message and a single "Done" button.
+              */
+              <>
+                <Text style={styles.modalTitle}>Crop Added!</Text>
+                <Text style={styles.modalMessage}>
+                  {suggestPayload?.cropType} has been added to My Crops. You can
+                  now track its history and get personalised insights.
+                </Text>
+                <TouchableOpacity
+                  style={styles.modalPrimaryButton}
+                  onPress={handleDismissModal}
+                >
+                  <Text style={styles.modalPrimaryButtonText}>Done</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              /*
+                DEFAULT / ERROR STATE: shown immediately when the modal opens,
+                and also if the API call returns an error.
+              */
+              <>
+                <Text style={styles.modalTitle}>Add to My Crops?</Text>
+
+                {/* The message string comes directly from the backend payload */}
+                <Text style={styles.modalMessage}>
+                  {suggestPayload?.message}
+                </Text>
+
+                {/* Error banner -- only shown when addCropError is set */}
+                {addCropError ? (
+                  <View style={styles.errorBanner}>
+                    <Ionicons
+                      name="alert-circle-outline"
+                      size={moderateScale(16)}
+                      color="#FF4D4D"
+                    />
+                    <Text style={styles.errorBannerText}>{addCropError}</Text>
+                  </View>
+                ) : null}
+
+                {/* Primary CTA: adds the crop */}
+                <TouchableOpacity
+                  style={[
+                    styles.modalPrimaryButton,
+                    isAddingCrop && styles.buttonDisabled,
+                  ]}
+                  onPress={handleAddToCrops}
+                  disabled={isAddingCrop}
+                >
+                  {isAddingCrop ? (
+                    <ActivityIndicator size="small" color="#FFFFE7" />
+                  ) : (
+                    <Text style={styles.modalPrimaryButtonText}>
+                      Yes, Add Crop
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                {/* Secondary CTA: dismisses the modal without adding */}
+                <TouchableOpacity
+                  style={[
+                    styles.modalSecondaryButton,
+                    isAddingCrop && styles.buttonDisabled,
+                  ]}
+                  onPress={handleDismissModal}
+                  disabled={isAddingCrop}
+                >
+                  <Text style={styles.modalSecondaryButtonText}>Not Now</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </BlurView>
+      </Modal>
+
+      {/* ---- The rest of the screen is unchanged below ---- */}
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        //  Prevent scroll interaction with background while modal
+        // is open. scrollEnabled false when modal is showing avoids the user
+        // accidentally interacting with content behind the overlay.
+        scrollEnabled={!showSuggestModal}
+      >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-            <Ionicons name="arrow-back-circle-outline" size={moderateScale(32)} color="#FFFFFF" />
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.iconButton}
+            disabled={isTtsLoading || showSuggestModal}
+          >
+            <Ionicons
+              name="arrow-back-circle-outline"
+              size={moderateScale(32)}
+              color="#FFFFFF"
+            />
           </TouchableOpacity>
           <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.circleIconBg}>
-              <Ionicons name="bookmark" size={moderateScale(18)} color="#FFFFFF" />
+            <TouchableOpacity
+              style={styles.circleIconBg}
+              disabled={showSuggestModal}
+            >
+              <Ionicons
+                name="bookmark"
+                size={moderateScale(18)}
+                color="#FFFFFF"
+              />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.circleIconBg}>
-              <Ionicons name="share-social" size={moderateScale(18)} color="#FFFFFF" />
+            <TouchableOpacity
+              style={styles.circleIconBg}
+              disabled={showSuggestModal}
+            >
+              <Ionicons
+                name="share-social"
+                size={moderateScale(18)}
+                color="#FFFFFF"
+              />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Title */}
         <Text style={styles.mainTitle}>Result</Text>
 
         {/* Disease Info Card */}
         <View style={[styles.card, { backgroundColor: cardColor }]}>
           {scanResult?.imageUrl ? (
-            <Image 
-              source={{ uri: scanResult.imageUrl }} 
+            <Image
+              source={{ uri: scanResult.imageUrl }}
               style={styles.diseaseImage}
               contentFit="cover"
             />
           ) : (
-            <Image 
-              source={require('@/assets/images/septorialeaf.png')} 
+            <Image
+              source={require("@/assets/images/septorialeaf.png")}
               style={styles.diseaseImage}
               contentFit="cover"
             />
           )}
           <View style={styles.diseaseInfo}>
-            <Text style={[styles.alertText, { color: redColor }]}>Disease Detected</Text>
-            <Text style={styles.diseaseName}>{scanResult?.diseaseName || 'Septoria'}</Text>
-            <Text style={styles.diseaseSubtitle}>{scanResult?.detectedCrop ? `On ${scanResult.detectedCrop}` : 'A leaf spot fungus'}</Text>
+            <Text style={[styles.alertText, { color: redColor }]}>
+              Disease Detected
+            </Text>
+            <Text style={styles.diseaseName}>
+              {scanResult?.diseaseName || "Unknown"}
+            </Text>
+            <Text style={styles.diseaseSubtitle}>
+              {scanResult?.detectedCrop
+                ? `On ${scanResult.detectedCrop}`
+                : "No specific crop identified"}
+            </Text>
             <View style={styles.confidenceRow}>
               <Text style={styles.confidenceLabel}>Confidence: </Text>
-              <Text style={[styles.confidenceValue, { color: brightGreenColor }]}>
+              <Text
+                style={[styles.confidenceValue, { color: brightGreenColor }]}
+              >
                 {formatConfidence(scanResult?.confidence)}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Description Card */}
-        <View style={[styles.card, { backgroundColor: cardColor, flexDirection: 'column' }]}>
-          <Text style={styles.cardTitle}>Description</Text>
+        {/* Description Card with TTS */}
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: cardColor, flexDirection: "column" },
+          ]}
+        >
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardTitle}>Description</Text>
+            {user?.language === "tw" && (
+              <TouchableOpacity
+                onPress={toggleTts}
+                disabled={isTtsLoading || showSuggestModal}
+                style={styles.ttsButton}
+              >
+                {isTtsLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons
+                    name={isPlaying ? "pause-circle" : "volume-medium"}
+                    size={moderateScale(24)}
+                    color="#FFFFFF"
+                  />
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+
           <Text style={styles.cardText}>
-            {scanResult?.symptoms || scanResult?.causes || 'Septoria, commonly known as a leaf spot is a species of fungus that infects vegetables, trees and ornamental plants. In some cases damage is insignificant, in others there\'s no hope.'}
+            {scanResult?.symptoms ||
+              scanResult?.causes ||
+              "No detailed description available for this detection."}
           </Text>
         </View>
 
-        {/* Recommended Actions Card */}
-        <View style={[styles.card, { backgroundColor: cardColor, flexDirection: 'column', marginBottom: verticalScale(30) }]}>
+        {/* Recommended Actions */}
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: cardColor,
+              flexDirection: "column",
+              marginBottom: verticalScale(30),
+            },
+          ]}
+        >
           <Text style={styles.cardTitle}>Recommended Actions</Text>
-          
           {getActions().map((action, index) => (
             <View key={index} style={styles.actionItem}>
-              <Ionicons name="checkmark" size={moderateScale(20)} color="#FFFFFF" />
+              <Ionicons
+                name="checkmark"
+                size={moderateScale(20)}
+                color="#FFFFFF"
+              />
               <Text style={styles.actionText}>{action}</Text>
             </View>
           ))}
         </View>
 
-        {/* Action Buttons */}
         <View style={styles.bottomButtonsContainer}>
-          <TouchableOpacity style={styles.primaryButton}>
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              showSuggestModal && styles.buttonDisabled,
+            ]}
+            disabled={isTtsLoading || showSuggestModal}
+          >
             <Text style={styles.primaryButtonText}>View Details</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.secondaryButton}
+          <TouchableOpacity
+            style={[
+              styles.secondaryButton,
+              showSuggestModal && styles.buttonDisabled,
+            ]}
             onPress={handleListen}
+            disabled={isTtsLoading || showSuggestModal}
           >
-            <Ionicons name="volume-medium" size={moderateScale(20)} color="#FFFFFF" style={styles.buttonIcon} />
+            <Ionicons
+              name="volume-medium"
+              size={moderateScale(20)}
+              color="#FFFFFF"
+              style={styles.buttonIcon}
+            />
             <Text style={styles.secondaryButtonText}>Listen(Twi)</Text>
           </TouchableOpacity>
         </View>
-
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
+  safeArea: { flex: 1 },
   scrollContainer: {
     paddingHorizontal: scale(16),
     paddingBottom: verticalScale(30),
   },
+
+  // -- NO CHANGES: existing styles --
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingTop: verticalScale(10),
     paddingBottom: verticalScale(10),
   },
-  iconButton: {
-    padding: scale(4),
-  },
+  iconButton: { padding: scale(4) },
   headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: scale(12),
   },
   circleIconBg: {
     width: moderateScale(36),
     height: moderateScale(36),
     borderRadius: moderateScale(18),
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   mainTitle: {
     fontSize: moderateScale(28),
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textAlign: 'center',
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "center",
     marginBottom: verticalScale(20),
   },
   card: {
     borderRadius: moderateScale(12),
     padding: moderateScale(16),
     marginBottom: verticalScale(16),
-    flexDirection: 'row',
+    flexDirection: "row",
   },
   diseaseImage: {
     width: moderateScale(100),
@@ -204,88 +585,193 @@ const styles = StyleSheet.create({
   diseaseInfo: {
     flex: 1,
     marginLeft: scale(16),
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   alertText: {
     fontSize: moderateScale(13),
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: verticalScale(4),
   },
   diseaseName: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: moderateScale(20),
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: verticalScale(2),
   },
   diseaseSubtitle: {
-    color: '#E5E7EB',
+    color: "#E5E7EB",
     fontSize: moderateScale(14),
     marginBottom: verticalScale(10),
   },
-  confidenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  confidenceRow: { flexDirection: "row", alignItems: "center" },
   confidenceLabel: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: moderateScale(13),
-    fontWeight: '600',
+    fontWeight: "600",
   },
-  confidenceValue: {
-    fontSize: moderateScale(13),
-    fontWeight: '700',
-  },
+  confidenceValue: { fontSize: moderateScale(13), fontWeight: "700" },
   cardTitle: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: moderateScale(16),
-    fontWeight: '600',
-    marginBottom: verticalScale(12),
+    fontWeight: "600",
   },
   cardText: {
-    color: '#E5E7EB',
+    color: "#E5E7EB",
     fontSize: moderateScale(14),
     lineHeight: moderateScale(22),
   },
   actionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: verticalScale(12),
   },
   actionText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: moderateScale(14),
     marginLeft: scale(12),
   },
-  bottomButtonsContainer: {
-    gap: verticalScale(16),
-  },
+  bottomButtonsContainer: { gap: verticalScale(16) },
   primaryButton: {
-    backgroundColor: '#FFFFE7', // Cream color from theme background
+    backgroundColor: "#FFFFE7",
     borderRadius: moderateScale(30),
     paddingVertical: verticalScale(14),
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   primaryButtonText: {
-    color: '#094A04',
+    color: "#094A04",
     fontSize: moderateScale(16),
-    fontWeight: '700',
+    fontWeight: "700",
   },
   secondaryButton: {
-    flexDirection: 'row',
+    flexDirection: "row",
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: "#FFFFFF",
     borderRadius: moderateScale(30),
     paddingVertical: verticalScale(14),
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   secondaryButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: moderateScale(16),
-    fontWeight: '700',
+    fontWeight: "700",
   },
-  buttonIcon: {
-    marginRight: scale(8),
+  buttonIcon: { marginRight: scale(8) },
+  cardTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: verticalScale(12),
+  },
+  ttsButton: { padding: scale(4) },
+
+  // --  modal styles --
+
+  // Full-screen BlurView that acts as the backdrop
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: scale(24),
+  },
+
+  // The white card that floats on top of the blur
+  modalCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: moderateScale(20),
+    padding: moderateScale(24),
+    width: "100%",
+    alignItems: "center",
+    // Subtle shadow so the card lifts off the blurred background
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+
+  // Circular icon container at the top of the card
+  modalIconWrapper: {
+    width: moderateScale(70),
+    height: moderateScale(70),
+    borderRadius: moderateScale(35),
+    backgroundColor: "#F0FFF4",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: verticalScale(16),
+  },
+
+  modalTitle: {
+    fontSize: moderateScale(20),
+    fontWeight: "700",
+    color: "#094A04",
+    textAlign: "center",
+    marginBottom: verticalScale(10),
+  },
+
+  modalMessage: {
+    fontSize: moderateScale(14),
+    color: "#374151",
+    textAlign: "center",
+    lineHeight: moderateScale(22),
+    marginBottom: verticalScale(20),
+  },
+
+  // Red error banner shown below the message when the API call fails
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderRadius: moderateScale(8),
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(8),
+    marginBottom: verticalScale(14),
+    gap: scale(6),
+    width: "100%",
+  },
+  errorBannerText: {
+    color: "#FF4D4D",
+    fontSize: moderateScale(13),
+    flex: 1,
+  },
+
+  // Green "Yes, Add Crop" button
+  modalPrimaryButton: {
+    backgroundColor: "#094A04",
+    borderRadius: moderateScale(30),
+    paddingVertical: verticalScale(13),
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: verticalScale(10),
+    minHeight: verticalScale(48),
+  },
+  modalPrimaryButtonText: {
+    color: "#FFFFE7",
+    fontSize: moderateScale(15),
+    fontWeight: "700",
+  },
+
+  // Ghost "Not Now" button
+  modalSecondaryButton: {
+    borderRadius: moderateScale(30),
+    paddingVertical: verticalScale(13),
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    minHeight: verticalScale(48),
+  },
+  modalSecondaryButtonText: {
+    color: "#6B7280",
+    fontSize: moderateScale(15),
+    fontWeight: "600",
+  },
+
+  // Applied to any button that should appear disabled
+  buttonDisabled: {
+    opacity: 0.5,
   },
 });

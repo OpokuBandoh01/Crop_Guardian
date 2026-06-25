@@ -34,7 +34,8 @@ type CropTypeEnum =
   | "RICE"
   | "YAM"
   | "GROUNDNUT"
-  | "ONION";
+  | "ONION"
+  | "FREE"
 
 const CROP_TYPES: { id: CropTypeEnum; name: string; icon: any }[] = [
   {
@@ -85,6 +86,11 @@ const CROP_TYPES: { id: CropTypeEnum; name: string; icon: any }[] = [
   {
     id: "ONION",
     name: "Onion",
+    icon: require("@/assets/images/onion_icon.png"),
+  },
+   {
+    id: "FREE",
+    name: "Unknown",
     icon: require("@/assets/images/onion_icon.png"),
   },
 ];

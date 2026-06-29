@@ -18,6 +18,8 @@ import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
 import API from "@/services/api";
 
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "react-native";
 import AddCropModal from "../../components/crops/components/AddCropModal";
 import CropCard from "../../components/crops/components/CropCard";
 import CropDetailSheet from "../../components/crops/components/CropDetailSheet";
@@ -167,6 +169,8 @@ export const fmtDate = (iso: string | null): string => {
 
 export default function MyCropsScreen() {
   const router = useRouter();
+  const colorScheme = useColorScheme() ?? "light";
+  const theme = Colors[colorScheme];
 
   // List state
   const [crops, setCrops] = useState<MyCrop[]>([]);
@@ -393,7 +397,10 @@ export default function MyCropsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.background }]}
+      edges={["top"]}
+    >
       {/* Animated sticky header */}
       <Animated.View style={[styles.stickyHeader, { height: headerHeight }]}>
         <Animated.View style={{ opacity: greetingOpacity }}>

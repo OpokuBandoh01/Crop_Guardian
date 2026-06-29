@@ -3,13 +3,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import React from "react";
 import {
-    ActivityIndicator,
-    Modal,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 import { CropType } from "../../../app/(tabs)/my-crops";
@@ -26,7 +26,7 @@ interface AddCropModalProps {
   CROP_META: Record<CropType, { emoji: string; accent: string; label: string }>;
 }
 
-/** Add Crop Modal - All fields disabled during loading */
+/** Add Crop Modal - All fields and buttons disabled during loading */
 export default function AddCropModal({
   visible,
   addableCrops,
@@ -46,16 +46,28 @@ export default function AddCropModal({
       statusBarTranslucent
       onRequestClose={onClose}
     >
+      {/*
+       * BlurView with intensity 60 + dark tint provides backdrop blur.
+       * This locks the background visually and prevents interaction
+       * when the modal is open (pointerEvents handled by TouchableOpacity overlay).
+       */}
       <BlurView intensity={60} tint="dark" style={styles.modalBackdrop}>
+        {/* Full-screen invisible overlay to dismiss by tapping outside */}
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
           onPress={onClose}
           disabled={addLoading}
         />
+
+        {/* Sheet card: #FFFFFF surface matching home's dailyTipCard / quickActionBtn */}
         <View style={styles.bottomSheet}>
+          {/* Drag handle */}
           <View style={styles.sheetHandle} />
+
+          {/* Title: matches home's sectionTitle style */}
           <Text style={styles.sheetTitle}>Add a Crop</Text>
+          {/* Subtitle: matches home's subtitleText / cropConditionSub style */}
           <Text style={styles.sheetSubtitle}>
             Pick a crop to start tracking its health
           </Text>
@@ -77,6 +89,8 @@ export default function AddCropModal({
                     key={crop}
                     style={[
                       styles.cropGridItem,
+                      // Selected: use crop accent color border + light tinted bg
+                      // matches home's overviewCard tinted background pattern
                       isSelected && {
                         borderColor: meta.accent,
                         backgroundColor: meta.accent + "18",
@@ -129,6 +143,10 @@ export default function AddCropModal({
               disabled={!selectedNewCrop || addLoading}
             >
               {addLoading ? (
+                /*
+                 * ActivityIndicator uses cream #FFFFE7 color to match
+                 * the home scan banner's white-on-green button text pattern
+                 */
                 <ActivityIndicator color="#FFFFE7" />
               ) : (
                 <>
@@ -163,6 +181,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   bottomSheet: {
+    // #FFFFFF surface card matching home's dailyTipCard background
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: moderateScale(24),
     borderTopRightRadius: moderateScale(24),
@@ -170,29 +189,31 @@ const styles = StyleSheet.create({
     paddingBottom: verticalScale(Platform.OS === "ios" ? 36 : 24),
     paddingTop: verticalScale(16),
     width: "100%",
+    // Shadow matches home's bottomCard elevation pattern
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 20,
+    shadowOpacity: 0.08, // matches home's scanBanner shadowOpacity
+    shadowRadius: 8, // matches home's scanBanner shadowRadius
+    elevation: 10,
   },
   sheetHandle: {
     width: scale(36),
     height: verticalScale(4),
-    backgroundColor: "#D1D5DB",
+    // #D9D9D9 matches home's blendBorder / divider color
+    backgroundColor: "#D9D9D9",
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: verticalScale(16),
   },
   sheetTitle: {
     fontSize: moderateScale(20),
-    fontWeight: "800",
-    color: "#083D04",
+    fontWeight: "700", // matches home's greetingText fontWeight
+    color: "#11181C", // matches home's primary text color
     marginBottom: verticalScale(4),
   },
   sheetSubtitle: {
-    fontSize: moderateScale(14),
-    color: "#6B7280",
+    fontSize: moderateScale(13), // matches home's subtitleText fontSize
+    color: "#687076", // matches home's cropConditionSub color
     marginBottom: verticalScale(20),
   },
   cropGrid: {
@@ -203,19 +224,26 @@ const styles = StyleSheet.create({
   },
   cropGridItem: {
     width: "47%",
-    borderWidth: 1.5,
-    borderColor: "#E5E7EB",
-    borderRadius: moderateScale(14),
+    // Border matches home's quickActionBtn border style
+    borderWidth: 1,
+    borderColor: "#D9D9D9",
+    borderRadius: moderateScale(12), // matches home's overviewCard / quickActionBtn
     padding: moderateScale(14),
     alignItems: "center",
     gap: verticalScale(6),
     position: "relative",
+    // Subtle shadow matching home's overviewCard
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   cropGridEmoji: { fontSize: moderateScale(28) },
   cropGridLabel: {
-    fontSize: moderateScale(14),
+    fontSize: moderateScale(13), // matches home's cropNameText fontSize
     fontWeight: "600",
-    color: "#374151",
+    color: "#11181C", // matches home's cropNameText color
   },
   cropGridCheck: {
     position: "absolute",
@@ -233,14 +261,15 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(8),
   },
   allAddedText: {
-    fontSize: moderateScale(14),
-    color: "#6B7280",
+    fontSize: moderateScale(13),
+    color: "#687076", // matches home's cropConditionSub color
     textAlign: "center",
   },
   primaryBtn: {
     flexDirection: "row",
+    // #094A04 matches home's primary button / scan banner background color
     backgroundColor: "#094A04",
-    borderRadius: moderateScale(28),
+    borderRadius: moderateScale(28), // pill shape matching home's scan action buttons
     paddingVertical: verticalScale(14),
     alignItems: "center",
     justifyContent: "center",
@@ -249,6 +278,7 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(10),
   },
   primaryBtnText: {
+    // #FFFFE7 cream text matches home's scan banner button label style
     color: "#FFFFE7",
     fontSize: moderateScale(15),
     fontWeight: "700",
@@ -259,11 +289,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: "#D9D9D9", // matches home's blendBorder / divider color
     minHeight: verticalScale(48),
   },
   ghostBtnText: {
-    color: "#6B7280",
+    color: "#687076", // matches home's viewAllLink / subtitleText color
     fontSize: moderateScale(15),
     fontWeight: "600",
   },

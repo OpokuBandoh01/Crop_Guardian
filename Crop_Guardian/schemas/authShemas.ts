@@ -1,4 +1,5 @@
 // schemas/authSchemas.ts
+//this is a frontend file
 // This file mirrors the backend Zod schemas so we catch bad data
 // BEFORE it ever reaches the network. Any change to the backend
 // schema should be reflected here too.

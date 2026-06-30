@@ -3,6 +3,7 @@ import WeatherWidget from "@/components/WeatherWidget";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import API from "@/services/api";
+import { useNotificationStore } from "@/stores/notificationStore";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useRouter } from "expo-router";
@@ -19,11 +20,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
+const colorScheme = useColorScheme() ?? "light";
+const theme = Colors[colorScheme];
 export default function HomeScreen() {
   const router = useRouter();
   const navigation = useNavigation();
-  const colorScheme = useColorScheme() ?? "light";
-  const theme = Colors[colorScheme];
+  const { unreadCount, fetchNotifications } = useNotificationStore();
 
   const [userData, setUserData] = useState<any>(null);
   const [myCrops, setMyCrops] = useState<any[]>([]);
@@ -31,11 +33,10 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [weatherRefreshTrigger, setWeatherRefreshTrigger] = useState(0);
 
-  // Promise.all ensures the spinner stays visible until BOTH finish
   const onRefresh = async () => {
     setRefreshing(true);
-    setWeatherRefreshTrigger((prev) => prev + 1); // tells WeatherWidget to re-fetch
-    await Promise.all([fetchUser(), fetchMyCrops()]);
+    setWeatherRefreshTrigger((prev) => prev + 1);
+    await Promise.all([fetchUser(), fetchMyCrops(), fetchNotifications()]);
     setRefreshing(false);
   };
 
@@ -92,14 +93,16 @@ export default function HomeScreen() {
   useEffect(() => {
     fetchUser();
     fetchMyCrops();
+    fetchNotifications();
 
     const unsubscribe = navigation.addListener("focus", () => {
       fetchUser();
       fetchMyCrops();
+      fetchNotifications();
     });
 
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, fetchNotifications]);
 
   return (
     <SafeAreaView
@@ -142,13 +145,22 @@ export default function HomeScreen() {
 
           <TouchableOpacity
             style={styles.notificationButton}
+            onPress={() => router.push("/alerts")}
             activeOpacity={0.7}
+            disabled={false} // will respect loading from store if extended later
           >
             <Ionicons
               name="notifications-outline"
               size={moderateScale(24)}
               color={theme.primary}
             />
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -996,5 +1008,23 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#005B66",
     marginRight: scale(4),
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: "#EF4444",
+    borderRadius: moderateScale(10),
+    minWidth: moderateScale(18),
+    height: moderateScale(18),
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: theme.background,
+  },
+  badgeText: {
+    color: "#FFFFFF",
+    fontSize: moderateScale(10),
+    fontWeight: "700",
   },
 });

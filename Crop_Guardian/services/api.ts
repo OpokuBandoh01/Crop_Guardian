@@ -28,4 +28,27 @@ API.interceptors.response.use(
   },
 );
 
+export async function forgotPassword(phoneNumber: string) {
+  const response = await API.post("/api/auth/forgot-password", {
+    phoneNumber,
+  });
+  return response.data;
+}
+
+export async function verifyResetOtp(phoneNumber: string, otp: string) {
+  const response = await API.post("/api/auth/verify-reset-otp", {
+    phoneNumber,
+    otp,
+  });
+  return response.data;
+}
+
+export async function resetPassword(resetToken: string, newPassword: string) {
+  const response = await API.post("/api/auth/reset-password", {
+    resetToken,
+    newPassword,
+  });
+  return response.data;
+}
+
 export default API;

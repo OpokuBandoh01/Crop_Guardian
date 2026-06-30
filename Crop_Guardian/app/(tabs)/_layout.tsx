@@ -1,3 +1,4 @@
+// app\(tabs)\_layout.tsx
 import { Redirect, Tabs } from "expo-router";
 import React from "react";
 import { Image, StyleSheet, Text, View } from "react-native";

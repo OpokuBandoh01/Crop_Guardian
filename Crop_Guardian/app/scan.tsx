@@ -8,7 +8,8 @@ import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import {
   ActivityIndicator,
   Alert,
@@ -100,41 +101,41 @@ export default function ScanScreen() {
   const [selectedCrop, setSelectedCrop] = useState<CropTypeEnum | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  const [facing, setFacing] = useState<"back" | "front">("back");
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView>(null);
+
   useEffect(() => {
     if (action === "camera") {
-      takePhoto();
+      if (permission && !permission.granted) {
+        requestPermission();
+      }
     } else if (action === "gallery") {
       uploadImage();
     }
-  }, [action]);
+  }, [action, permission, requestPermission]);
 
-  const takePhoto = async () => {
+  const takePhotoInApp = async () => {
+    if (!cameraRef.current) return;
     try {
-      const permissionResult =
-        await ImagePicker.requestCameraPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert(
-          "Permission Required",
-          "Camera access permission is required to take photos.",
-        );
-        return;
-      }
-      const pickerResult = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
+      setIsLoading(true);
+      const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
       });
-      if (
-        !pickerResult.canceled &&
-        pickerResult.assets &&
-        pickerResult.assets.length > 0
-      ) {
-        setImageUri(pickerResult.assets[0].uri);
+      if (photo && photo.uri) {
+        setImageUri(photo.uri);
         setSelectedCrop(null);
       }
     } catch (error) {
-      console.error("Camera error:", error);
-      Alert.alert("Error", "Failed to launch camera.");
+      console.error("Capture photo error:", error);
+      Alert.alert("Error", "Failed to capture photo.");
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const toggleCameraFacing = () => {
+    setFacing((current) => (current === "back" ? "front" : "back"));
   };
 
   const uploadImage = async () => {
@@ -257,7 +258,7 @@ export default function ScanScreen() {
               <Text
                 style={[
                   styles.cropCardText,
-                  { color: isSelected ? "#FFFFFF" : "#0ee14a" },
+                  { color: isSelected ? "#FFFFFF" : theme.primary },
                 ]}
               >
                 {crop.name}
@@ -305,20 +306,41 @@ export default function ScanScreen() {
             style={styles.image}
             contentFit="cover"
           />
-        ) : (
-          <View style={styles.placeholderContainer}>
-            <Ionicons
-              name="camera-outline"
-              size={moderateScale(48)}
-              color={theme.icon}
+        ) : permission ? (
+          permission.granted ? (
+            <CameraView
+              style={StyleSheet.absoluteFillObject}
+              facing={facing}
+              ref={cameraRef}
             />
-            <Text style={[styles.placeholderText, { color: theme.text }]}>
-              No image selected
-            </Text>
-            <Text style={[styles.placeholderSubtext, { color: theme.text }]}>
-              Use the camera button below or pick from your gallery
-            </Text>
-          </View>
+          ) : (
+            <View style={styles.placeholderContainer}>
+              <Ionicons
+                name="alert-circle-outline"
+                size={moderateScale(48)}
+                color={theme.icon}
+              />
+              <Text style={[styles.placeholderText, { color: theme.text }]}>
+                Camera access required
+              </Text>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: theme.primary,
+                  paddingHorizontal: scale(16),
+                  paddingVertical: verticalScale(8),
+                  borderRadius: 8,
+                  marginTop: 12,
+                }}
+                onPress={requestPermission}
+              >
+                <Text style={{ color: "#FFFFFF", fontWeight: "bold" }}>
+                  Grant Access
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )
+        ) : (
+          <ActivityIndicator color={theme.primary} size="large" />
         )}
 
         {/* Frame corners  */}
@@ -337,6 +359,18 @@ export default function ScanScreen() {
               Select Crop Type
             </Text>
             {renderCropGrid()}
+
+            {/* Clear Image Button (Top-Right of Overlay) */}
+            <TouchableOpacity
+              style={styles.clearImageButton}
+              onPress={() => {
+                setImageUri(null);
+                setSelectedCrop(null);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close" size={moderateScale(20)} color="#FFFFFF" />
+            </TouchableOpacity>
           </BlurView>
         )}
       </View>
@@ -371,7 +405,7 @@ export default function ScanScreen() {
             (!imageUri || !selectedCrop || isLoading) &&
               styles.diagnoseButtonDisabled,
           ]}
-          onPress={imageUri && selectedCrop ? handleSubmit : takePhoto}
+          onPress={imageUri && selectedCrop ? handleSubmit : takePhotoInApp}
           disabled={isLoading}
         >
           {isLoading ? (
@@ -412,7 +446,7 @@ export default function ScanScreen() {
             styles.invertButton,
             { borderColor: theme.text },
           ]}
-          onPress={takePhoto}
+          onPress={toggleCameraFacing}
           disabled={isLoading}
         >
           <Image
@@ -587,6 +621,25 @@ const styles = StyleSheet.create({
     width: moderateScale(56),
     height: moderateScale(56),
     borderRadius: moderateScale(28),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clearImageButton: {
+    position: "absolute",
+    top: verticalScale(12),
+    right: scale(12),
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    width: moderateScale(32),
+    height: moderateScale(32),
+    borderRadius: moderateScale(16),
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
 
   placeholderContainer: {

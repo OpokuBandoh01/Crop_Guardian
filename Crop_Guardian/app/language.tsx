@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { scale, verticalScale, moderateScale } from 'react-native-size-matters';
@@ -15,28 +14,19 @@ import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { CustomButton } from '@/components/CustomButton';
+import { useAuthStore } from '@/stores/authStore';
+import API from '@/services/api';
 
 interface LanguageOption {
   code: string;
   name: string;
   nativeName: string;
-  isRegional: boolean;
   flag: string;
 }
 
 const LANGUAGES: LanguageOption[] = [
-  // Regional
-  { code: 'en', name: 'English', nativeName: 'English', isRegional: true, flag: '🇬🇧' },
-  { code: 'tw', name: 'Twi', nativeName: 'Akan (Twi)', isRegional: true, flag: '🇬🇭' },
-  { code: 'ga', name: 'Ga', nativeName: 'Gã', isRegional: true, flag: '🇬🇭' },
-  { code: 'ee', name: 'Ewe', nativeName: 'Èʋegbe', isRegional: true, flag: '🇬🇭' },
-  { code: 'fat', name: 'Fante', nativeName: 'Mfantse', isRegional: true, flag: '🇬🇭' },
-  { code: 'dag', name: 'Dagbani', nativeName: 'Dagbanli', isRegional: true, flag: '🇬🇭' },
-  { code: 'ha', name: 'Hausa', nativeName: 'Harshen Hausa', isRegional: true, flag: '🇳🇬' },
-  // International
-  { code: 'fr', name: 'French', nativeName: 'Français', isRegional: false, flag: '🇫🇷' },
-  { code: 'es', name: 'Spanish', nativeName: 'Español', isRegional: false, flag: '🇪🇸' },
-  { code: 'pt', name: 'Portuguese', nativeName: 'Português', isRegional: false, flag: '🇵🇹' },
+  { code: 'en', name: 'English', nativeName: 'English', flag: '🇬🇧' },
+  { code: 'tw', name: 'Twi', nativeName: 'Akan (Twi)', flag: '🇬🇭' },
 ];
 
 export default function LanguageScreen() {
@@ -44,30 +34,34 @@ export default function LanguageScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedLanguage, setSelectedLanguage] = useState('en');
+  const user = useAuthStore((state) => state.user);
+  const updateUser = useAuthStore((state) => state.updateUser);
+
+  const [selectedLanguage, setSelectedLanguage] = useState(user?.language || 'en');
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      updateUser({ language: selectedLanguage });
+      try {
+        await API.put('/api/auth/me', {
+          language: selectedLanguage,
+        });
+      } catch (err) {
+        console.warn("Backend language update failed:", err);
+      }
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
       }, 3000);
-    }, 1000);
+    } catch (error) {
+      console.error("Save language error:", error);
+    } finally {
+      setIsSaving(false);
+    }
   };
-
-  const filteredLanguages = LANGUAGES.filter(
-    (lang) =>
-      lang.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lang.nativeName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const regionalLanguages = filteredLanguages.filter((l) => l.isRegional);
-  const internationalLanguages = filteredLanguages.filter((l) => !l.isRegional);
 
   const renderLanguageItem = (lang: LanguageOption) => {
     const isSelected = selectedLanguage === lang.code;
@@ -133,67 +127,21 @@ export default function LanguageScreen() {
         </View>
       )}
 
-      {/* Search Input Section */}
-      <View style={styles.searchSection}>
-        <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.inputBorder }]}>
-          <Ionicons name="search-outline" size={moderateScale(18)} color={theme.placeholder} style={styles.searchIcon} />
-          <TextInput
-            placeholder="Search language..."
-            placeholderTextColor={theme.placeholder}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            style={[styles.searchInput, { color: theme.text }]}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
-              <Ionicons name="close-circle" size={moderateScale(18)} color={theme.placeholder} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
       >
-        {/* Regional / Ghanaian Group */}
-        {regionalLanguages.length > 0 && (
-          <View style={styles.groupContainer}>
-            <Text style={[styles.groupTitle, { color: theme.primary }]}>Ghanaian &amp; Regional Languages</Text>
-            <View style={[styles.groupCard, { backgroundColor: theme.surface }]}>
-              {regionalLanguages.map((lang, idx) => (
-                <View key={lang.code}>
-                  {renderLanguageItem(lang)}
-                  {idx < regionalLanguages.length - 1 && <View style={styles.divider} />}
-                </View>
-              ))}
-            </View>
+        <View style={styles.groupContainer}>
+          <Text style={[styles.groupTitle, { color: theme.primary }]}>Available Languages</Text>
+          <View style={[styles.groupCard, { backgroundColor: theme.surface }]}>
+            {LANGUAGES.map((lang, idx) => (
+              <View key={lang.code}>
+                {renderLanguageItem(lang)}
+                {idx < LANGUAGES.length - 1 && <View style={styles.divider} />}
+              </View>
+            ))}
           </View>
-        )}
-
-        {/* International Group */}
-        {internationalLanguages.length > 0 && (
-          <View style={styles.groupContainer}>
-            <Text style={[styles.groupTitle, { color: theme.primary }]}>International Languages</Text>
-            <View style={[styles.groupCard, { backgroundColor: theme.surface }]}>
-              {internationalLanguages.map((lang, idx) => (
-                <View key={lang.code}>
-                  {renderLanguageItem(lang)}
-                  {idx < internationalLanguages.length - 1 && <View style={styles.divider} />}
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* No search results */}
-        {filteredLanguages.length === 0 && (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="globe-outline" size={moderateScale(48)} color={theme.placeholder} />
-            <Text style={[styles.emptyText, { color: theme.text }]}>No languages found matching &quot;{searchQuery}&quot;</Text>
-          </View>
-        )}
+        </View>
 
         {/* Action Button */}
         <CustomButton
@@ -265,29 +213,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     flex: 1,
   },
-  searchSection: {
-    paddingHorizontal: scale(16),
-    paddingBottom: verticalScale(10),
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.2,
-    borderRadius: moderateScale(10),
-    paddingHorizontal: scale(12),
-    height: verticalScale(40),
-  },
-  searchIcon: {
-    marginRight: scale(8),
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: moderateScale(13),
-    height: '100%',
-    padding: 0,
-  },
   scrollContent: {
     paddingHorizontal: scale(16),
+    paddingTop: verticalScale(10),
     paddingBottom: verticalScale(40),
   },
   groupContainer: {
@@ -359,18 +287,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(9, 74, 4, 0.05)',
     marginHorizontal: scale(14),
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: verticalScale(40),
-    gap: verticalScale(12),
-  },
-  emptyText: {
-    fontSize: moderateScale(13),
-    fontWeight: '600',
-    textAlign: 'center',
-    opacity: 0.8,
   },
   saveButton: {
     marginTop: verticalScale(12),

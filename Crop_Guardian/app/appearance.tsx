@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,29 +14,38 @@ import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { CustomButton } from '@/components/CustomButton';
+import { useThemeStore } from '@/stores/themeStore';
 
 export default function AppearanceScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
 
+  const themePreference = useThemeStore((state) => state.themePreference);
+  const setThemePreference = useThemeStore((state) => state.setThemePreference);
+
   // Theme states: 'light' | 'dark' | 'system'
   const [selectedTheme, setSelectedTheme] = useState<'light' | 'dark' | 'system'>(
-    colorScheme === 'dark' ? 'dark' : 'light'
+    themePreference
   );
   
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
+  useEffect(() => {
+    setSelectedTheme(themePreference);
+  }, [themePreference]);
+
   const handleSave = () => {
     setIsSaving(true);
     setTimeout(() => {
+      setThemePreference(selectedTheme);
       setIsSaving(false);
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
       }, 3000);
-    }, 1000);
+    }, 500);
   };
 
   return (

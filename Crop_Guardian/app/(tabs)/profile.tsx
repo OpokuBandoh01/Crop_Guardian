@@ -20,6 +20,7 @@ import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/stores/authStore";
+import { useThemeStore } from "@/stores/themeStore";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -31,6 +32,32 @@ export default function ProfileScreen() {
   const [userData, setUserData] = useState<any>(null);
 
   const logoutUser = useAuthStore((state) => state.logout);
+  const themePreference = useThemeStore((state) => state.themePreference);
+  const user = useAuthStore((state) => state.user);
+
+  const getThemePreferenceLabel = () => {
+    switch (themePreference) {
+      case "light":
+        return { label: "Light", icon: "sunny-outline" };
+      case "dark":
+        return { label: "Dark", icon: "moon-outline" };
+      case "system":
+        return { label: "System", icon: "settings-outline" };
+      default:
+        return { label: "System", icon: "settings-outline" };
+    }
+  };
+
+  const getLanguageLabel = () => {
+    switch (user?.language) {
+      case "en":
+        return "English";
+      case "tw":
+        return "Twi";
+      default:
+        return "English";
+    }
+  };
 
   const fetchUserData = async () => {
     try {
@@ -394,17 +421,18 @@ export default function ProfileScreen() {
             { name: "moon-outline", type: "ionicons" },
             <View style={[styles.pillBadge, { backgroundColor: pillBg }]}>
               <Ionicons
-                name="sunny-outline"
+                name={getThemePreferenceLabel().icon as any}
                 size={moderateScale(11)}
                 color={pillText}
               />
-              <Text style={[styles.pillBadgeText, { color: pillText }]}>
-                Light
+              <Text style={[styles.pillBadgeText, { color: pillText, marginLeft: scale(4) }]}>
+                {getThemePreferenceLabel().label}
               </Text>
               <Ionicons
                 name="chevron-forward"
                 size={moderateScale(11)}
                 color={pillText}
+                style={{ marginLeft: scale(2) }}
               />
             </View>,
             false,
@@ -417,12 +445,13 @@ export default function ProfileScreen() {
             { name: "globe-outline", type: "ionicons" },
             <View style={[styles.pillBadge, { backgroundColor: pillBg }]}>
               <Text style={[styles.pillBadgeText, { color: pillText }]}>
-                English
+                {getLanguageLabel()}
               </Text>
               <Ionicons
                 name="chevron-forward"
                 size={moderateScale(11)}
                 color={pillText}
+                style={{ marginLeft: scale(4) }}
               />
             </View>,
             false,

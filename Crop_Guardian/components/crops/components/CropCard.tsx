@@ -3,6 +3,9 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
+
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
   fmtConfidence,
   fmtDate,
@@ -25,13 +28,22 @@ export default function CropCard({
   onEdit,
   onDelete,
 }: CropCardProps) {
+  const colorScheme = useColorScheme() ?? "light";
+  const theme = Colors[colorScheme];
+
   const meta = getCropMeta(item.cropType);
   const statusMeta = getStatusMeta(item.status);
   const riskMeta = getRiskMeta(item.riskLevel);
 
   return (
     <TouchableOpacity
-      style={styles.cropCard}
+      style={[
+        styles.cropCard,
+        {
+          backgroundColor: theme.surface,
+          shadowColor: colorScheme === "light" ? "#094A04" : "#000000",
+        },
+      ]}
       onPress={() => onPress(item)}
       activeOpacity={0.85}
     >
@@ -39,14 +51,19 @@ export default function CropCard({
 
       <View style={styles.cardBody}>
         <View style={styles.cardHeaderRow}>
-          <View style={styles.cropEmojiWrapper}>
+          <View
+            style={[
+              styles.cropEmojiWrapper,
+              { backgroundColor: colorScheme === "light" ? "#F0F7EE" : "#253A20" },
+            ]}
+          >
             <Text style={styles.cropEmoji}>{meta.emoji}</Text>
           </View>
 
           <View style={styles.cropNameBlock}>
-            <Text style={styles.cropLabel}>{meta.label}</Text>
+            <Text style={[styles.cropLabel, { color: theme.text }]}>{meta.label}</Text>
             {item.customName ? (
-              <Text style={styles.customName} numberOfLines={1}>
+              <Text style={[styles.customName, { color: theme.icon }]} numberOfLines={1}>
                 {item.customName}
               </Text>
             ) : null}
@@ -74,7 +91,7 @@ export default function CropCard({
             </Text>
           </View>
 
-          <Text style={styles.lastActivity}>
+          <Text style={[styles.lastActivity, { color: theme.icon }]}>
             {item.lastActivityDate
               ? `Last scan ${fmtDate(item.lastActivityDate)}`
               : "No scans yet"}
@@ -83,8 +100,8 @@ export default function CropCard({
 
         {item.lastDetection ? (
           <View style={styles.lastDetectionRow}>
-            <Ionicons name="bug-outline" size={12} color="#6B7280" />
-            <Text style={styles.lastDetectionText} numberOfLines={1}>
+            <Ionicons name="bug-outline" size={12} color={theme.icon} />
+            <Text style={[styles.lastDetectionText, { color: theme.icon }]} numberOfLines={1}>
               {item.lastDetection.diseaseName} —{" "}
               {fmtConfidence(item.lastDetection.confidence)} confidence
             </Text>
@@ -102,36 +119,36 @@ export default function CropCard({
           </View>
         )}
 
-        <View style={styles.cardActionRow}>
+        <View style={[styles.cardActionRow, { borderTopColor: colorScheme === "light" ? "#F3F4F6" : "#2D3D2A" }]}>
           <TouchableOpacity
             style={styles.cardActionBtn}
             onPress={() => onEdit(item)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="pencil-outline" size={14} color="#094A04" />
-            <Text style={styles.cardActionText}>Edit Status</Text>
+            <Ionicons name="pencil-outline" size={14} color={theme.primary} />
+            <Text style={[styles.cardActionText, { color: theme.primary }]}>Edit Status</Text>
           </TouchableOpacity>
 
-          <View style={styles.cardActionDivider} />
+          <View style={[styles.cardActionDivider, { backgroundColor: colorScheme === "light" ? "#E5E7EB" : "#2D3D2A" }]} />
 
           <TouchableOpacity
             style={styles.cardActionBtn}
             onPress={() => onPress(item)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="time-outline" size={14} color="#094A04" />
-            <Text style={styles.cardActionText}>History</Text>
+            <Ionicons name="time-outline" size={14} color={theme.primary} />
+            <Text style={[styles.cardActionText, { color: theme.primary }]}>History</Text>
           </TouchableOpacity>
 
-          <View style={styles.cardActionDivider} />
+          <View style={[styles.cardActionDivider, { backgroundColor: colorScheme === "light" ? "#E5E7EB" : "#2D3D2A" }]} />
 
           <TouchableOpacity
             style={styles.cardActionBtn}
             onPress={() => onDelete(item)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="trash-outline" size={14} color="#EF4444" />
-            <Text style={[styles.cardActionText, { color: "#EF4444" }]}>
+            <Ionicons name="trash-outline" size={14} color={theme.error} />
+            <Text style={[styles.cardActionText, { color: theme.error }]}>
               Remove
             </Text>
           </TouchableOpacity>

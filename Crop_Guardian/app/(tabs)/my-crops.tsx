@@ -16,6 +16,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import API from "@/services/api";
 
 import AddCropModal from "../../components/crops/components/AddCropModal";
@@ -167,6 +169,8 @@ export const fmtDate = (iso: string | null): string => {
 
 export default function MyCropsScreen() {
   const router = useRouter();
+  const colorScheme = useColorScheme() ?? "light";
+  const theme = Colors[colorScheme];
 
   // List state
   const [crops, setCrops] = useState<MyCrop[]>([]);
@@ -378,27 +382,34 @@ export default function MyCropsScreen() {
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyEmoji}>🌱</Text>
-      <Text style={styles.emptyTitle}>No crops tracked yet</Text>
-      <Text style={styles.emptySubtitle}>
+      <Text style={[styles.emptyTitle, { color: theme.primary }]}>No crops tracked yet</Text>
+      <Text style={[styles.emptySubtitle, { color: theme.text }]}>
         Add your first crop and start monitoring its health in one place.
       </Text>
       <TouchableOpacity
-        style={styles.emptyAddButton}
+        style={[styles.emptyAddButton, { backgroundColor: theme.primary }]}
         onPress={() => setShowAddModal(true)}
       >
-        <Ionicons name="add" size={18} color="#FFFFE7" />
-        <Text style={styles.emptyAddText}>Add Your First Crop</Text>
+        <Ionicons name="add" size={18} color={colorScheme === "light" ? "#FFFFE7" : "#11181C"} />
+        <Text style={[styles.emptyAddText, { color: colorScheme === "light" ? "#FFFFE7" : "#11181C" }]}>Add Your First Crop</Text>
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={["top"]}>
       {/* Animated sticky header */}
-      <Animated.View style={[styles.stickyHeader, { height: headerHeight }]}>
+      <Animated.View style={[
+        styles.stickyHeader,
+        {
+          height: headerHeight,
+          backgroundColor: theme.background,
+          borderBottomColor: colorScheme === "light" ? "#E5EBE3" : "#2E3D2C",
+        }
+      ]}>
         <Animated.View style={{ opacity: greetingOpacity }}>
-          <Text style={styles.headerGreeting}>Your Farm</Text>
-          <Text style={styles.headerSub}>
+          <Text style={[styles.headerGreeting, { color: theme.primary }]}>Your Farm</Text>
+          <Text style={[styles.headerSub, { color: theme.icon }]}>
             {crops.length} crop{crops.length !== 1 ? "s" : ""} being monitored
           </Text>
         </Animated.View>
@@ -406,31 +417,32 @@ export default function MyCropsScreen() {
         <TouchableOpacity
           style={[
             styles.addHeaderBtn,
+            { backgroundColor: theme.primary },
             (loading || addableCrops.length === 0) && styles.disabledOpacity,
           ]}
           onPress={() => setShowAddModal(true)}
           disabled={loading || addableCrops.length === 0}
         >
-          <Ionicons name="add" size={20} color="#FFFFE7" />
-          <Text style={styles.addHeaderText}>Add Crop</Text>
+          <Ionicons name="add" size={20} color={colorScheme === "light" ? "#FFFFE7" : "#11181C"} />
+          <Text style={[styles.addHeaderText, { color: colorScheme === "light" ? "#FFFFE7" : "#11181C" }]}>Add Crop</Text>
         </TouchableOpacity>
       </Animated.View>
 
       {/* List / loading / error */}
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#094A04" />
-          <Text style={styles.loadingText}>Loading your crops...</Text>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={[styles.loadingText, { color: theme.text }]}>Loading your crops...</Text>
         </View>
       ) : listError ? (
         <View style={styles.centered}>
-          <Ionicons name="cloud-offline-outline" size={48} color="#9CA3AF" />
-          <Text style={styles.errorText}>{listError}</Text>
+          <Ionicons name="cloud-offline-outline" size={48} color={theme.icon} />
+          <Text style={[styles.errorText, { color: theme.text }]}>{listError}</Text>
           <TouchableOpacity
-            style={styles.retryBtn}
+            style={[styles.retryBtn, { backgroundColor: theme.primary }]}
             onPress={() => fetchCrops()}
           >
-            <Text style={styles.retryText}>Try Again</Text>
+            <Text style={[styles.retryText, { color: colorScheme === "light" ? "#FFFFE7" : "#11181C" }]}>Try Again</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -460,8 +472,8 @@ export default function MyCropsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#094A04"
-              colors={["#094A04"]}
+              tintColor={theme.primary}
+              colors={[theme.primary]}
             />
           }
         />

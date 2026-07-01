@@ -11,6 +11,9 @@ import {
     View,
 } from "react-native";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
+
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getCropMeta, MyCrop } from "../../../app/(tabs)/my-crops";
 
 interface DeleteConfirmModalProps {
@@ -30,6 +33,9 @@ export default function DeleteConfirmModal({
   onClose,
   onConfirm,
 }: DeleteConfirmModalProps) {
+  const colorScheme = useColorScheme() ?? "light";
+  const theme = Colors[colorScheme];
+
   return (
     <Modal
       visible={visible}
@@ -49,15 +55,15 @@ export default function DeleteConfirmModal({
           onPress={onClose}
           disabled={deleteLoading}
         />
-        <View style={styles.deleteCard}>
-          <View style={styles.deleteIconWrap}>
+        <View style={[styles.deleteCard, { backgroundColor: theme.surface }]}>
+          <View style={[styles.deleteIconWrap, { backgroundColor: colorScheme === "light" ? "#FEE2E2" : "#2D1B1B" }]}>
             <Ionicons name="warning-outline" size={32} color="#EF4444" />
           </View>
-          <Text style={styles.deleteTitle}>Remove Crop?</Text>
+          <Text style={[styles.deleteTitle, { color: theme.text }]}>Remove Crop?</Text>
           {deleteTarget && (
-            <Text style={styles.deleteMessage}>
+            <Text style={[styles.deleteMessage, { color: theme.icon }]}>
               This will remove{" "}
-              <Text style={{ fontWeight: "700" }}>
+              <Text style={{ fontWeight: "700", color: theme.text }}>
                 {getCropMeta(deleteTarget.cropType).label}
               </Text>{" "}
               from your tracked crops. Your scan history is preserved.
@@ -65,7 +71,7 @@ export default function DeleteConfirmModal({
           )}
 
           {deleteError ? (
-            <View style={styles.errorBanner}>
+            <View style={[styles.errorBanner, { backgroundColor: colorScheme === "light" ? "#FEF2F2" : "#2D1D1D" }]}>
               <Ionicons name="alert-circle" size={14} color="#EF4444" />
               <Text style={styles.errorBannerText}>{deleteError}</Text>
             </View>
@@ -74,6 +80,7 @@ export default function DeleteConfirmModal({
           <TouchableOpacity
             style={[
               styles.deleteConfirmBtn,
+              { backgroundColor: theme.error },
               deleteLoading && styles.disabledOpacity,
             ]}
             onPress={onConfirm}
@@ -87,11 +94,15 @@ export default function DeleteConfirmModal({
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.ghostBtn, deleteLoading && styles.disabledOpacity]}
+            style={[
+              styles.ghostBtn,
+              { borderColor: colorScheme === "light" ? "#D1D5DB" : "#4B5563" },
+              deleteLoading && styles.disabledOpacity,
+            ]}
             onPress={onClose}
             disabled={deleteLoading}
           >
-            <Text style={styles.ghostBtnText}>Keep Crop</Text>
+            <Text style={[styles.ghostBtnText, { color: theme.icon }]}>Keep Crop</Text>
           </TouchableOpacity>
         </View>
       </BlurView>

@@ -13,6 +13,9 @@ import {
     View,
 } from "react-native";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
+
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
     ALL_STATUSES,
     CropStatus,
@@ -46,6 +49,9 @@ export default function EditStatusModal({
   onNotesChange,
   onSave,
 }: EditStatusModalProps) {
+  const colorScheme = useColorScheme() ?? "light";
+  const theme = Colors[colorScheme];
+
   return (
     <Modal
       visible={visible}
@@ -61,17 +67,17 @@ export default function EditStatusModal({
           onPress={onClose}
           disabled={editLoading}
         />
-        <View style={styles.bottomSheet}>
-          <View style={styles.sheetHandle} />
-          <Text style={styles.sheetTitle}>Update Crop</Text>
+        <View style={[styles.bottomSheet, { backgroundColor: theme.surface }]}>
+          <View style={[styles.sheetHandle, { backgroundColor: colorScheme === "light" ? "#D1D5DB" : "#4B5563" }]} />
+          <Text style={[styles.sheetTitle, { color: theme.primary }]}>Update Crop</Text>
           {editTarget && (
-            <Text style={styles.sheetSubtitle}>
+            <Text style={[styles.sheetSubtitle, { color: theme.icon }]}>
               {getCropMeta(editTarget.cropType).emoji}{" "}
               {getCropMeta(editTarget.cropType).label}
             </Text>
           )}
 
-          <Text style={styles.fieldLabel}>Current Status</Text>
+          <Text style={[styles.fieldLabel, { color: theme.text }]}>Current Status</Text>
           <View style={styles.statusGrid}>
             {ALL_STATUSES.map((s) => {
               const sm = STATUS_META[s];
@@ -81,6 +87,7 @@ export default function EditStatusModal({
                   key={s}
                   style={[
                     styles.statusOption,
+                    { borderColor: colorScheme === "light" ? "#E5E7EB" : "#2D3D2A" },
                     isActive && {
                       borderColor: sm.color,
                       backgroundColor: sm.color + "18",
@@ -96,6 +103,7 @@ export default function EditStatusModal({
                   <Text
                     style={[
                       styles.statusOptionText,
+                      { color: theme.text },
                       isActive && { color: sm.color, fontWeight: "700" },
                     ]}
                   >
@@ -114,45 +122,61 @@ export default function EditStatusModal({
             })}
           </View>
 
-          <Text style={styles.fieldLabel}>Notes (optional)</Text>
+          <Text style={[styles.fieldLabel, { color: theme.text }]}>Notes (optional)</Text>
           <TextInput
-            style={[styles.textArea, editLoading && styles.disabledOpacity]}
+            style={[
+              styles.textArea,
+              {
+                borderColor: colorScheme === "light" ? "#D1D5DB" : "#4B5563",
+                backgroundColor: theme.surface,
+                color: theme.text,
+              },
+              editLoading && styles.disabledOpacity,
+            ]}
             value={editNotes}
             onChangeText={onNotesChange}
             placeholder="Any observations about this crop..."
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={theme.placeholder}
             multiline
             numberOfLines={3}
             maxLength={500}
             editable={!editLoading}
           />
-          <Text style={styles.charCount}>{editNotes.length}/500</Text>
+          <Text style={[styles.charCount, { color: theme.icon }]}>{editNotes.length}/500</Text>
 
           {editError ? (
-            <View style={styles.errorBanner}>
+            <View style={[styles.errorBanner, { backgroundColor: colorScheme === "light" ? "#FEF2F2" : "#2D1D1D" }]}>
               <Ionicons name="alert-circle" size={14} color="#EF4444" />
               <Text style={styles.errorBannerText}>{editError}</Text>
             </View>
           ) : null}
 
           <TouchableOpacity
-            style={[styles.primaryBtn, editLoading && styles.disabledOpacity]}
+            style={[
+              styles.primaryBtn,
+              { backgroundColor: theme.primary },
+              editLoading && styles.disabledOpacity,
+            ]}
             onPress={onSave}
             disabled={editLoading}
           >
             {editLoading ? (
-              <ActivityIndicator color="#FFFFE7" />
+              <ActivityIndicator color={colorScheme === "light" ? "#FFFFE7" : "#11181C"} />
             ) : (
-              <Text style={styles.primaryBtnText}>Save Changes</Text>
+              <Text style={[styles.primaryBtnText, { color: colorScheme === "light" ? "#FFFFE7" : "#11181C" }]}>Save Changes</Text>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.ghostBtn, editLoading && styles.disabledOpacity]}
+            style={[
+              styles.ghostBtn,
+              { borderColor: colorScheme === "light" ? "#D1D5DB" : "#4B5563" },
+              editLoading && styles.disabledOpacity,
+            ]}
             onPress={onClose}
             disabled={editLoading}
           >
-            <Text style={styles.ghostBtnText}>Cancel</Text>
+            <Text style={[styles.ghostBtnText, { color: theme.icon }]}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </BlurView>

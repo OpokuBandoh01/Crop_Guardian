@@ -12,6 +12,9 @@ import {
     View,
 } from "react-native";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
+
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { CropType } from "../../../app/(tabs)/my-crops";
 
 interface AddCropModalProps {
@@ -38,6 +41,9 @@ export default function AddCropModal({
   onAddCrop,
   CROP_META,
 }: AddCropModalProps) {
+  const colorScheme = useColorScheme() ?? "light";
+  const theme = Colors[colorScheme];
+
   return (
     <Modal
       visible={visible}
@@ -53,17 +59,17 @@ export default function AddCropModal({
           onPress={onClose}
           disabled={addLoading}
         />
-        <View style={styles.bottomSheet}>
-          <View style={styles.sheetHandle} />
-          <Text style={styles.sheetTitle}>Add a Crop</Text>
-          <Text style={styles.sheetSubtitle}>
+        <View style={[styles.bottomSheet, { backgroundColor: theme.surface }]}>
+          <View style={[styles.sheetHandle, { backgroundColor: colorScheme === "light" ? "#D1D5DB" : "#4B5563" }]} />
+          <Text style={[styles.sheetTitle, { color: theme.primary }]}>Add a Crop</Text>
+          <Text style={[styles.sheetSubtitle, { color: theme.icon }]}>
             Pick a crop to start tracking its health
           </Text>
 
           {addableCrops.length === 0 ? (
             <View style={styles.allAddedWrap}>
               <Text style={styles.allAddedEmoji}>🎉</Text>
-              <Text style={styles.allAddedText}>
+              <Text style={[styles.allAddedText, { color: theme.icon }]}>
                 You are tracking all available crops!
               </Text>
             </View>
@@ -77,6 +83,7 @@ export default function AddCropModal({
                     key={crop}
                     style={[
                       styles.cropGridItem,
+                      { borderColor: colorScheme === "light" ? "#E5E7EB" : "#2D3D2A" },
                       isSelected && {
                         borderColor: meta.accent,
                         backgroundColor: meta.accent + "18",
@@ -91,6 +98,7 @@ export default function AddCropModal({
                     <Text
                       style={[
                         styles.cropGridLabel,
+                        { color: theme.text },
                         isSelected && { color: meta.accent, fontWeight: "700" },
                       ]}
                     >
@@ -113,7 +121,7 @@ export default function AddCropModal({
           )}
 
           {addError ? (
-            <View style={styles.errorBanner}>
+            <View style={[styles.errorBanner, { backgroundColor: colorScheme === "light" ? "#FEF2F2" : "#2D1D1D" }]}>
               <Ionicons name="alert-circle" size={14} color="#EF4444" />
               <Text style={styles.errorBannerText}>{addError}</Text>
             </View>
@@ -123,32 +131,37 @@ export default function AddCropModal({
             <TouchableOpacity
               style={[
                 styles.primaryBtn,
+                { backgroundColor: theme.primary },
                 (!selectedNewCrop || addLoading) && styles.disabledOpacity,
               ]}
               onPress={onAddCrop}
               disabled={!selectedNewCrop || addLoading}
             >
               {addLoading ? (
-                <ActivityIndicator color="#FFFFE7" />
+                <ActivityIndicator color={colorScheme === "light" ? "#FFFFE7" : "#11181C"} />
               ) : (
                 <>
                   <Ionicons
                     name="add-circle-outline"
                     size={18}
-                    color="#FFFFE7"
+                    color={colorScheme === "light" ? "#FFFFE7" : "#11181C"}
                   />
-                  <Text style={styles.primaryBtnText}>Add to My Crops</Text>
+                  <Text style={[styles.primaryBtnText, { color: colorScheme === "light" ? "#FFFFE7" : "#11181C" }]}>Add to My Crops</Text>
                 </>
               )}
             </TouchableOpacity>
           )}
 
           <TouchableOpacity
-            style={[styles.ghostBtn, addLoading && styles.disabledOpacity]}
+            style={[
+              styles.ghostBtn,
+              { borderColor: colorScheme === "light" ? "#D1D5DB" : "#4B5563" },
+              addLoading && styles.disabledOpacity,
+            ]}
             onPress={onClose}
             disabled={addLoading}
           >
-            <Text style={styles.ghostBtnText}>Cancel</Text>
+            <Text style={[styles.ghostBtnText, { color: theme.icon }]}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </BlurView>

@@ -14,6 +14,9 @@ import {
     View,
 } from "react-native";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
+
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
     DetectionHistoryItem,
     fmtConfidence,
@@ -49,6 +52,8 @@ export default function CropDetailSheet({
   onDelete,
 }: CropDetailSheetProps) {
   const router = useRouter();
+  const colorScheme = useColorScheme() ?? "light";
+  const theme = Colors[colorScheme];
 
   if (!selectedCrop) return null;
 
@@ -70,18 +75,23 @@ export default function CropDetailSheet({
           activeOpacity={1}
           onPress={onClose}
         />
-        <View style={[styles.bottomSheet, styles.bottomSheetTall]}>
-          <View style={styles.sheetHandle} />
+        <View style={[styles.bottomSheet, styles.bottomSheetTall, { backgroundColor: theme.surface }]}>
+          <View style={[styles.sheetHandle, { backgroundColor: colorScheme === "light" ? "#D1D5DB" : "#4B5563" }]} />
 
           <View style={styles.detailHeader}>
-            <View style={styles.detailEmojiWrap}>
+            <View
+              style={[
+                styles.detailEmojiWrap,
+                { backgroundColor: colorScheme === "light" ? "#F0F7EE" : "#253A20" },
+              ]}
+            >
               <Text style={styles.detailEmoji}>{sMeta.emoji}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.detailCropName}>{sMeta.label}</Text>
+              <Text style={[styles.detailCropName, { color: theme.text }]}>{sMeta.label}</Text>
               {selectedCrop.customName ? (
-                <Text style={styles.detailCustomName}>
-                  "{selectedCrop.customName}"
+                <Text style={[styles.detailCustomName, { color: theme.icon }]}>
+                  {`"${selectedCrop.customName}"`}
                 </Text>
               ) : null}
               <View style={styles.detailStatusRow}>
@@ -104,84 +114,90 @@ export default function CropDetailSheet({
             <View style={styles.detailIconActions}>
               <TouchableOpacity
                 onPress={() => onEdit(selectedCrop)}
-                style={styles.detailIconBtn}
+                style={[
+                  styles.detailIconBtn,
+                  { backgroundColor: colorScheme === "light" ? "#F3F4F6" : "#2D3D2A" },
+                ]}
               >
-                <Ionicons name="pencil-outline" size={18} color="#094A04" />
+                <Ionicons name="pencil-outline" size={18} color={theme.primary} />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => onDelete(selectedCrop)}
-                style={styles.detailIconBtn}
+                style={[
+                  styles.detailIconBtn,
+                  { backgroundColor: colorScheme === "light" ? "#F3F4F6" : "#2D3D2A" },
+                ]}
               >
-                <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                <Ionicons name="trash-outline" size={18} color={theme.error} />
               </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.statsRow}>
-            <View style={styles.statChip}>
-              <Text style={styles.statValue}>
+            <View style={[styles.statChip, { backgroundColor: colorScheme === "light" ? "#F0F7EE" : "#2D3D2A" }]}>
+              <Text style={[styles.statValue, { color: theme.text }]}>
                 {selectedCrop.farmSize
                   ? `${selectedCrop.farmSize} ${selectedCrop.farmSizeUnit}`
                   : "N/A"}
               </Text>
-              <Text style={styles.statLabel}>Farm Size</Text>
+              <Text style={[styles.statLabel, { color: theme.icon }]}>Farm Size</Text>
             </View>
-            <View style={styles.statChip}>
+            <View style={[styles.statChip, { backgroundColor: colorScheme === "light" ? "#F0F7EE" : "#2D3D2A" }]}>
               <Text style={[styles.statValue, { color: sRiskMeta.color }]}>
                 {(selectedCrop.riskLevel ?? "LOW").toUpperCase()}
               </Text>
-              <Text style={styles.statLabel}>Risk Level</Text>
+              <Text style={[styles.statLabel, { color: theme.icon }]}>Risk Level</Text>
             </View>
-            <View style={styles.statChip}>
-              <Text style={styles.statValue}>
+            <View style={[styles.statChip, { backgroundColor: colorScheme === "light" ? "#F0F7EE" : "#2D3D2A" }]}>
+              <Text style={[styles.statValue, { color: theme.text }]}>
                 {selectedCrop.plantingDate
                   ? fmtDate(selectedCrop.plantingDate)
                   : "N/A"}
               </Text>
-              <Text style={styles.statLabel}>Planted</Text>
+              <Text style={[styles.statLabel, { color: theme.icon }]}>Planted</Text>
             </View>
           </View>
 
           {selectedCrop.notes ? (
-            <View style={styles.notesBox}>
+            <View style={[styles.notesBox, { backgroundColor: colorScheme === "light" ? "#FFFBEB" : "#2E2512", borderLeftColor: colorScheme === "light" ? "#F59E0B" : "#D97706" }]}>
               <Ionicons
                 name="document-text-outline"
                 size={14}
-                color="#6B7280"
+                color={theme.icon}
               />
-              <Text style={styles.notesText}>{selectedCrop.notes}</Text>
+              <Text style={[styles.notesText, { color: theme.text }]}>{selectedCrop.notes}</Text>
             </View>
           ) : null}
 
           {aggregates && aggregates.totalDetections > 0 ? (
             <View style={styles.aggregatesRow}>
-              <View style={styles.aggregateChip}>
-                <Text style={styles.aggregateValue}>
+              <View style={[styles.aggregateChip, { backgroundColor: colorScheme === "light" ? "#F0F7EE" : "#2D3D2A" }]}>
+                <Text style={[styles.aggregateValue, { color: theme.text }]}>
                   {aggregates.totalDetections}
                 </Text>
-                <Text style={styles.aggregateLabel}>Total Scans</Text>
+                <Text style={[styles.aggregateLabel, { color: theme.icon }]}>Total Scans</Text>
               </View>
-              <View style={styles.aggregateChip}>
-                <Text style={styles.aggregateValue}>
+              <View style={[styles.aggregateChip, { backgroundColor: colorScheme === "light" ? "#F0F7EE" : "#2D3D2A" }]}>
+                <Text style={[styles.aggregateValue, { color: theme.text }]}>
                   {fmtConfidence(aggregates.avgConfidence)}
                 </Text>
-                <Text style={styles.aggregateLabel}>Avg Confidence</Text>
+                <Text style={[styles.aggregateLabel, { color: theme.icon }]}>Avg Confidence</Text>
               </View>
-              <View style={[styles.aggregateChip, { flex: 1.6 }]}>
-                <Text style={styles.aggregateValue} numberOfLines={1}>
+              <View style={[styles.aggregateChip, { backgroundColor: colorScheme === "light" ? "#F0F7EE" : "#2D3D2A", flex: 1.6 }]}>
+                <Text style={[styles.aggregateValue, { color: theme.text }]} numberOfLines={1}>
                   {aggregates.mostCommonDisease ?? "None"}
                 </Text>
-                <Text style={styles.aggregateLabel}>Most Detected</Text>
+                <Text style={[styles.aggregateLabel, { color: theme.icon }]}>Most Detected</Text>
               </View>
             </View>
           ) : null}
 
-          <Text style={styles.historyTitle}>Scan History</Text>
+          <Text style={[styles.historyTitle, { color: theme.primary }]}>Scan History</Text>
 
           {historyLoading ? (
             <ActivityIndicator
               size="small"
-              color="#094A04"
+              color={theme.primary}
               style={{ marginVertical: verticalScale(16) }}
             />
           ) : historyError ? (
@@ -189,18 +205,18 @@ export default function CropDetailSheet({
           ) : history.length === 0 ? (
             <View style={styles.historyEmpty}>
               <Text style={styles.historyEmptyEmoji}>📷</Text>
-              <Text style={styles.historyEmptyText}>
+              <Text style={[styles.historyEmptyText, { color: theme.icon }]}>
                 No scans yet.{"\n"}Take a photo to start building your history.
               </Text>
               <TouchableOpacity
-                style={styles.scanNowBtn}
+                style={[styles.scanNowBtn, { backgroundColor: theme.primary }]}
                 onPress={() => {
                   onClose();
                   router.push("/scan" as any);
                 }}
               >
-                <Ionicons name="camera-outline" size={16} color="#FFFFE7" />
-                <Text style={styles.scanNowText}>Scan Now</Text>
+                <Ionicons name="camera-outline" size={16} color={colorScheme === "light" ? "#FFFFE7" : "#11181C"} />
+                <Text style={[styles.scanNowText, { color: colorScheme === "light" ? "#FFFFE7" : "#11181C" }]}>Scan Now</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -210,16 +226,22 @@ export default function CropDetailSheet({
               nestedScrollEnabled
             >
               {history.map((item) => (
-                <View key={item.id} style={styles.historyItem}>
+                <View
+                  key={item.id}
+                  style={[
+                    styles.historyItem,
+                    { backgroundColor: colorScheme === "light" ? "#F9FAFB" : "#2D3D2A" },
+                  ]}
+                >
                   <View style={styles.historyItemHeader}>
-                    <Text style={styles.historyDiseaseName} numberOfLines={1}>
+                    <Text style={[styles.historyDiseaseName, { color: theme.text }]} numberOfLines={1}>
                       {item.diseaseName}
                     </Text>
-                    <Text style={styles.historyDate}>
+                    <Text style={[styles.historyDate, { color: theme.icon }]}>
                       {fmtDate(item.createdAt)}
                     </Text>
                   </View>
-                  <View style={styles.confBarWrap}>
+                  <View style={[styles.confBarWrap, { backgroundColor: colorScheme === "light" ? "#E5E7EB" : "#1F2937" }]}>
                     <View
                       style={[
                         styles.confBar,
@@ -232,11 +254,11 @@ export default function CropDetailSheet({
                       ]}
                     />
                   </View>
-                  <Text style={styles.confLabel}>
+                  <Text style={[styles.confLabel, { color: theme.icon }]}>
                     {fmtConfidence(item.confidence)} confidence
                   </Text>
                   {item.symptoms ? (
-                    <Text style={styles.historySymptoms} numberOfLines={2}>
+                    <Text style={[styles.historySymptoms, { color: theme.icon }]} numberOfLines={2}>
                       {item.symptoms}
                     </Text>
                   ) : null}

@@ -467,7 +467,7 @@ export default function WeatherPage() {
 
             {/* ================= TODAY'S OUTLOOK ================= */}
             <Text style={[styles.sectionTitle, { color: theme.primary }]}>
-              Today's Outlook
+              Today&apos;s Outlook
             </Text>
             <View
               style={[styles.summaryCard, { backgroundColor: theme.surface }]}

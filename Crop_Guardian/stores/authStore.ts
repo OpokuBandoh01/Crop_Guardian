@@ -12,6 +12,8 @@ interface User {
   fullName?: string;
   language?: string;
   location?: AppLocation;
+  phoneNumber?: string;
+  isEmailVerified?: boolean;
 }
 
 interface AuthStore {

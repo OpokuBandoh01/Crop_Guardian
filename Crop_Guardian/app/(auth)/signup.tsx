@@ -23,7 +23,7 @@ import { LocationEditModal } from "@/components/LocationEditModal";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { SignUpFormData, signUpSchema } from "@/schemas/authShemas";
-import API from "@/services/api";
+import API, { forgotPassword } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 import { useOnboardingStore } from "@/stores/onboardingStore";
 import {
@@ -90,6 +90,7 @@ export default function SignUpScreen() {
   const watchedFirstName = watch("firstName");
   const watchedLastName = watch("lastName");
   const watchedEmail = watch("email");
+  const watchedPhoneNumber = watch("phoneNumber");
   const watchedPassword = watch("password");
   const watchedConfirm = watch("confirmPassword");
 
@@ -103,6 +104,7 @@ export default function SignUpScreen() {
     watchedFirstName.trim().length >= 2 &&
     watchedLastName.trim().length >= 2 &&
     watchedEmail.trim().length > 0 &&
+    watchedPhoneNumber.trim().length > 0 &&
     watchedPassword.length >= 8 &&
     watchedConfirm.length > 0;
 
@@ -180,7 +182,6 @@ export default function SignUpScreen() {
   };
 
   // ─── Form submission ──────────────────────────────────────────────────────
-  // handleSubmit only calls this after Zod passes — bad data never reaches here.
   const handleSignUp = async (data: SignUpFormData) => {
     if (!userLocation) {
       Alert.alert(
@@ -208,14 +209,11 @@ export default function SignUpScreen() {
 
     setIsLoading(true);
     try {
-      // The phoneNumber from Zod has already been transformed to digits only
-      // (or undefined if blank). Prefix +233 for the backend if present.
-      // Strip any leading 0 before adding country code.
-      let formattedPhone: string | undefined = undefined;
-      if (data.phoneNumber) {
-        const digits = data.phoneNumber.replace(/^0/, ""); // remove leading 0
-        formattedPhone = `+233${digits}`;
-      }
+      //  data.phoneNumber is now always a non-empty digit string
+      // (the Zod schema guarantees this), so the `if (data.phoneNumber)`
+      // guard that used to wrap this is no longer needed.
+      const digits = data.phoneNumber.replace(/^0/, ""); // remove leading 0
+      const formattedPhone = `+233${digits}`;
 
       const payload = {
         email: data.email.trim().toLowerCase(),
@@ -244,10 +242,24 @@ export default function SignUpScreen() {
       });
 
       completeOnboarding();
-      router.replace("/(tabs)");
+
+      //  formattedPhone is now always present, so the previous
+      // `if (formattedPhone)` guard around this call is removed.
+      try {
+        await forgotPassword(formattedPhone);
+      } catch (err) {
+        console.warn("Could not send verification code automatically:", err);
+      }
+
+      router.replace({
+        pathname: "/(auth)/verify-email",
+        params: {
+          phoneNumber: formattedPhone,
+          origin: "signup",
+        },
+      });
     } catch (error: any) {
       console.error("Signup error:", error);
-      // Avoid leaking raw server error details to the user
       const errorMsg =
         error.response?.data?.message ||
         "An error occurred during sign up. Please try again.";
@@ -285,7 +297,6 @@ export default function SignUpScreen() {
             resizeMode="contain"
           />
         </View>
-
         {/* Header */}
         <Text style={[styles.title, { color: theme.primary }]}>
           Create An Account
@@ -293,7 +304,6 @@ export default function SignUpScreen() {
         <Text style={[styles.subtitle, { color: theme.icon }]}>
           Join CropGuardian to start your plant care journey
         </Text>
-
         {/* ── First Name + Last Name Row ── */}
         <View style={styles.row}>
           {/* halfInputWrapper wraps both the input AND its error text
@@ -360,7 +370,6 @@ export default function SignUpScreen() {
             )}
           </View>
         </View>
-
         {/* ── Email ── */}
         <Controller
           control={control}
@@ -391,18 +400,12 @@ export default function SignUpScreen() {
             </View>
           )}
         />
-
         {/* ── Phone Number ── */}
-        {/* Phone is optional. We show the Ghana flag + +233 prefix as a
-            visual-only prefix beside the input. The raw digits the user
-            types go into the form; formatting and prefixing happen at
-            submit time so we never store a malformed string. */}
         <Controller
           control={control}
           name="phoneNumber"
           render={({ field: { onChange, onBlur, value } }) => (
             <View style={styles.phoneRow}>
-              {/* ── Static Ghana country code badge ── */}
               <View
                 style={[
                   styles.phonePrefixBadge,
@@ -412,24 +415,18 @@ export default function SignUpScreen() {
                   },
                 ]}
               >
-                {/* Ghana flag emoji + country code */}
                 <Text style={[styles.phonePrefixText, { color: theme.text }]}>
                   🇬🇭 +233
                 </Text>
               </View>
 
-              {/* ── Actual digit input ── */}
               <View style={styles.phoneInputFlex}>
                 <CustomInput
-                  placeholder="244 123 456 (Optional)"
-                  keyboardType="number-pad" // number-pad shows only digits on both platforms
+                  placeholder="244 123 456" // UPDATED: removed "(Optional)", this field is now required
+                  keyboardType="number-pad"
                   value={value}
                   onChangeText={(text) => {
-                    // Strip any non-digit characters the user might paste in.
-                    // This is the real-time guard — the Zod refine handles
-                    // final format validation on blur.
                     const digitsOnly = text.replace(/\D/g, "");
-                    // Cap at 10 digits (longest Ghana local format with leading 0)
                     onChange(digitsOnly.slice(0, 10));
                   }}
                   onBlur={onBlur}
@@ -440,6 +437,7 @@ export default function SignUpScreen() {
             </View>
           )}
         />
+        ;
         {errors.phoneNumber && (
           <Text
             style={[
@@ -451,7 +449,6 @@ export default function SignUpScreen() {
             {errors.phoneNumber.message}
           </Text>
         )}
-
         {/* ── Location Card ── */}
         <View
           style={[
@@ -526,7 +523,6 @@ export default function SignUpScreen() {
             </TouchableOpacity>
           </View>
         </View>
-
         {/* ── Password ── */}
         <Controller
           control={control}
@@ -562,7 +558,6 @@ export default function SignUpScreen() {
             </View>
           )}
         />
-
         {/* ── Confirm Password ── */}
         <Controller
           control={control}
@@ -591,7 +586,6 @@ export default function SignUpScreen() {
             </View>
           )}
         />
-
         {/* ── Terms ── */}
         <View style={styles.termsContainer}>
           <Text style={[styles.termsText, { color: theme.text }]}>
@@ -605,7 +599,6 @@ export default function SignUpScreen() {
             </Text>
           </Text>
         </View>
-
         {/* ── Submit Button ──
             disabled unless: all required fields filled + Zod valid + location set + not loading.
             The canSubmit boolean above centralises this logic. */}
@@ -615,7 +608,6 @@ export default function SignUpScreen() {
           disabled={!canSubmit}
           onPress={handleSubmit(handleSignUp)}
         />
-
         {/* Small hint so the user knows WHY the button is grey */}
         {!canSubmit && !isBusy && (
           <Text style={[styles.submitHint, { color: theme.icon }]}>
@@ -624,7 +616,6 @@ export default function SignUpScreen() {
               : "Please fill in all required fields correctly"}
           </Text>
         )}
-
         {/* ── Footer ── */}
         <View style={styles.footerContainer}>
           <Text style={[styles.footerText, { color: theme.icon }]}>

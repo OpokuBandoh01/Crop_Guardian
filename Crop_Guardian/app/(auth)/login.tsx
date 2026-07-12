@@ -20,7 +20,7 @@ import { CustomInput } from "@/components/CustomInput";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { LoginFormData, loginSchema } from "@/schemas/authShemas";
-import API from "@/services/api";
+import API, { forgotPassword } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 
 export default function LoginScreen() {
@@ -47,7 +47,6 @@ export default function LoginScreen() {
     },
   });
 
-  // handleSubmit only calls this if Zod validation passes
   const handleSignIn = async (data: LoginFormData) => {
     setIsLoading(true);
     try {
@@ -56,8 +55,30 @@ export default function LoginScreen() {
         password: data.password,
       });
 
-      const { token } = response.data;
-      loginUser(token, response.data.user);
+      const { token, user } = response.data;
+      loginUser(token, user);
+
+      // NEW ADDITION: if this account was never phone-verified (e.g. they
+      // closed the app during signup before finishing OTP), send them back
+      // to verification instead of the main app. Resend the OTP first,
+      // since any code from signup time may already be expired.
+      if (user?.isEmailVerified === false) {
+        try {
+          await forgotPassword(user.phoneNumber);
+        } catch (err) {
+          console.warn("Could not resend verification code:", err);
+        }
+
+        router.replace({
+          pathname: "/(auth)/verify-email",
+          params: {
+            phoneNumber: user.phoneNumber ?? "",
+            origin: "signup",
+          },
+        });
+        return;
+      }
+
       router.replace("/(tabs)");
     } catch (error: any) {
       console.error("Login error:", error);

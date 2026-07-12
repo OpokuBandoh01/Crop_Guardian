@@ -1,56 +1,55 @@
 // app/(auth)/verify-email.tsx
 // NOTE: filename kept as verify-email.tsx to avoid touching routing
 // elsewhere, but this screen now handles phone-based OTP verification.
-import { Ionicons } from "@expo/vector-icons"; // NO CHANGES
-import { useLocalSearchParams, useRouter } from "expo-router"; // UPDATED - added useLocalSearchParams
-import React, { useState } from "react"; // UPDATED - added useState
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useState } from "react";
 import {
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-} from "react-native"; // NO CHANGES
-import { SafeAreaView } from "react-native-safe-area-context"; // NO CHANGES
-import { moderateScale, scale, verticalScale } from "react-native-size-matters"; // NO CHANGES
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-import { AuthHeader } from "@/components/AuthHeader"; // NO CHANGES
-import { CustomButton } from "@/components/CustomButton"; // NO CHANGES
-import { OTPInput } from "@/components/OTPInput"; // NO CHANGES
-import { Colors } from "@/constants/theme"; // NO CHANGES
-import { useColorScheme } from "@/hooks/use-color-scheme"; // NO CHANGES
-import { forgotPassword, verifyResetOtp } from "@/services/api"; // NEW ADDITION
+import { AuthHeader } from "@/components/AuthHeader";
+import { CustomButton } from "@/components/CustomButton";
+import { OTPInput } from "@/components/OTPInput";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { forgotPassword, verifyResetOtp } from "@/services/api"; //
+import { useAuthStore } from "@/stores/authStore";
 
 export default function VerifyEmailScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
 
-  // NEW ADDITION: read the phoneNumber passed forward from forgot-password.tsx
-  const { phoneNumber } = useLocalSearchParams<{ phoneNumber: string }>();
+  const { phoneNumber, origin } = useLocalSearchParams<{
+    phoneNumber: string;
+    origin?: string;
+  }>();
+  const isSignupFlow = origin === "signup";
 
-  // NEW ADDITION: holds the 6-digit code as the user types it
+  const updateUser = useAuthStore((state) => state.updateUser);
+
   const [otpCode, setOtpCode] = useState("");
 
-  // NEW ADDITION: separate loading flags for verify vs resend,
-  // so tapping "Resend" doesn't show a spinner on the main button.
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
-  // NEW ADDITION: inline error + success messages
   const [errorMessage, setErrorMessage] = useState("");
   const [resendMessage, setResendMessage] = useState("");
 
-  // Any loading state disables the whole form, per project rule
   const isBusy = isVerifying || isResending;
 
-  // NEW ADDITION: called by OTPInput once all 6 digits are filled
   const handleCodeFilled = (code: string) => {
     setOtpCode(code);
     setErrorMessage("");
   };
 
-  // NEW ADDITION: verify button handler
   const handleVerify = async () => {
     setErrorMessage("");
 
@@ -60,8 +59,6 @@ export default function VerifyEmailScreen() {
     }
 
     if (!phoneNumber) {
-      // Defensive check: shouldn't happen in normal flow, but guards
-      // against this screen being opened directly without params.
       setErrorMessage("Missing phone number. Please go back and try again.");
       return;
     }
@@ -71,11 +68,20 @@ export default function VerifyEmailScreen() {
     try {
       const result = await verifyResetOtp(phoneNumber, otpCode);
 
-      // Pass the resetToken forward to reset-password.tsx via params.
-      router.push({
-        pathname: "/reset-password",
-        params: { resetToken: result.resetToken },
-      });
+      if (isSignupFlow) {
+        // Phone is verified, the backend already flipped isEmailVerified
+        // to true in the database. Mirror that in the local store so the
+        // (tabs) guard opens up immediately, then send the user into the app.
+        updateUser({ isEmailVerified: true });
+        router.replace("/(tabs)");
+      } else {
+        // Original forgot-password flow: continue to the reset-password
+        // screen with the short-lived resetToken.
+        router.push({
+          pathname: "/reset-password",
+          params: { resetToken: result.resetToken },
+        });
+      }
     } catch (error: any) {
       setErrorMessage(
         error?.response?.data?.message || "Invalid or expired OTP.",
@@ -85,7 +91,7 @@ export default function VerifyEmailScreen() {
     }
   };
 
-  // NEW ADDITION: resend code handler, reuses the forgotPassword API call
+  // : resend code handler, reuses the forgotPassword API call
   const handleResend = async () => {
     if (!phoneNumber || isBusy) return;
 
@@ -142,14 +148,14 @@ export default function VerifyEmailScreen() {
           {/* UPDATED - shows the phone number, was generic email text */}
         </Text>
 
-        {/* NEW ADDITION: inline error banner */}
+        {/* : inline error banner */}
         {errorMessage ? (
           <View style={styles.errorBanner}>
             <Text style={styles.errorText}>{errorMessage}</Text>
           </View>
         ) : null}
 
-        {/* NEW ADDITION: inline resend confirmation banner */}
+        {/* : inline resend confirmation banner */}
         {resendMessage ? (
           <View style={styles.successBanner}>
             <Text style={styles.successText}>{resendMessage}</Text>
@@ -163,8 +169,8 @@ export default function VerifyEmailScreen() {
           <CustomButton
             title="Continue"
             onPress={handleVerify} // UPDATED - was inline router.push, now calls verifyResetOtp first
-            loading={isVerifying} // NEW ADDITION
-            disabled={isBusy} // NEW ADDITION - disabled during verify AND resend
+            loading={isVerifying} //
+            disabled={isBusy} //  - disabled during verify AND resend
           />
         </View>
 
@@ -179,11 +185,11 @@ export default function VerifyEmailScreen() {
             <Text
               style={[
                 styles.footerLink,
-                { color: isBusy ? theme.icon : theme.primary }, // NEW ADDITION - visually dims the link while disabled
+                { color: isBusy ? theme.icon : theme.primary }, //  - visually dims the link while disabled
               ]}
             >
               {isResending ? "Sending..." : "Resend code"}{" "}
-              {/* NEW ADDITION - shows sending state */}
+              {/*  - shows sending state */}
             </Text>
           </TouchableOpacity>
         </View>
@@ -239,7 +245,7 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(14),
     fontWeight: "700",
   },
-  // NEW ADDITION: banner styles, matching change-password.tsx's pattern
+  // : banner styles, matching change-password.tsx's pattern
   errorBanner: {
     backgroundColor: "#C62828",
     paddingVertical: verticalScale(10),

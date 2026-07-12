@@ -43,20 +43,11 @@ export const signUpSchema = z
       .min(1, "Email is required")
       .email("Please enter a valid email address"),
 
-    // Phone number validation:
-    // - Optional field (user may leave it blank)
-    // - If provided, strip all non-digit characters first (spaces, dashes, +)
-    // - Then check it's exactly 9 digits (Ghana local format without leading 0)
-    //   OR 10 digits starting with 0 (Ghana local with leading 0)
-    //   OR 12 digits starting with 233 (international format without +)
-    // Backend stores the raw value, so we send the cleaned digits only
     phoneNumber: z
       .string()
-      .optional()
+      .min(1, "Phone number is required")
       .transform((val) => {
-        // If empty/undefined, return undefined so it's omitted from the payload
-        if (!val || val.trim() === "") return undefined;
-        // Strip everything that is not a digit
+        // Strip everything that is not a digit (spaces, dashes, +)
         return val.replace(/\D/g, "");
       })
       .refine(

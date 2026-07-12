@@ -14,9 +14,27 @@ export default function TabLayout() {
   const theme = Colors[colorScheme];
 
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
 
   if (!isAuthenticated) {
     return <Redirect href="/(auth)/login" />;
+  }
+
+  if (user?.isEmailVerified === false) {
+    return (
+      <Redirect
+        href={{
+          pathname: "/(auth)/verify-email",
+          params: {
+            phoneNumber: user.phoneNumber ?? "",
+            // "origin" tells verify-email.tsx this is a signup/login
+            // verification, not a password-reset OTP, so it knows to
+            // send the user into (tabs) on success instead of reset-password.
+            origin: "signup",
+          },
+        }}
+      />
+    );
   }
 
   return (

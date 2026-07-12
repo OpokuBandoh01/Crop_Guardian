@@ -24,7 +24,7 @@ export default function AlertsScreen() {
   const theme = Colors[colorScheme];
   const router = useRouter();
 
-  // NEW ADDITION: Connect to notification store
+  //  Connect to notification store
   const {
     notifications,
     loading,
@@ -38,7 +38,7 @@ export default function AlertsScreen() {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  // NEW ADDITION: Load notifications when screen mounts/focuses
+  //  Load notifications when screen mounts/focuses
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
@@ -102,7 +102,7 @@ export default function AlertsScreen() {
           Alerts
         </Text>
 
-        {/* NEW ADDITION: Mark all as read button */}
+        {/*  Mark all as read button */}
         {notifications.length > 0 && (
           <TouchableOpacity
             onPress={markAllAsRead}

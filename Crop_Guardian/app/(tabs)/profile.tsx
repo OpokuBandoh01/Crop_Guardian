@@ -93,6 +93,19 @@ export default function ProfileScreen() {
       ? "rgba(255, 255, 255, 0.65)"
       : "rgba(0, 0, 0, 0.75)";
 
+  // NEW ADDITION: maps the raw language code stored on the user object ("en" / "tw")
+  // to a human-readable label for the Preferences pill badge below. Falls back to
+  // "English" if the user's language hasn't loaded yet or is unset, since "en" is
+  // the backend's default language for new accounts.
+  // TypeScript note: `code?: string` means this parameter is optional (the `?`),
+  // so we can safely call getLanguageLabel(userData?.language) even before
+  // userData has loaded, without TypeScript complaining about a possible
+  // undefined value being passed in.
+  const getLanguageLabel = (code?: string): string => {
+    if (code === "tw") return "Twi";
+    return "English";
+  };
+
   const renderRow = (
     title: string,
     subtitle: string,
@@ -417,7 +430,12 @@ export default function ProfileScreen() {
             { name: "globe-outline", type: "ionicons" },
             <View style={[styles.pillBadge, { backgroundColor: pillBg }]}>
               <Text style={[styles.pillBadgeText, { color: pillText }]}>
-                English
+                {getLanguageLabel(userData?.language)}
+                {/* UPDATED: was a hardcoded "English" string before. Now reflects the
+                    user's actual saved language from /api/auth/me, so it updates
+                    automatically after the user changes it on the Language screen
+                    and this Profile screen refetches on focus (see the
+                    navigation.addListener("focus", ...) effect above). */}
               </Text>
               <Ionicons
                 name="chevron-forward"
@@ -506,7 +524,7 @@ export default function ProfileScreen() {
         transparent={true}
         visible={logoutModalVisible}
         onRequestClose={() => {
-          if (!isLoggingOut) setLogoutModalVisible(false); // UPDATED: block dismiss while loading
+          if (!isLoggingOut) setLogoutModalVisible(false); // NO CHANGES: block dismiss while loading
         }}
       >
         <View
@@ -606,7 +624,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: scale(16),
-    paddingTop: verticalScale(6),
     paddingBottom: verticalScale(100), // padding to clear floating navigation bar
   },
 

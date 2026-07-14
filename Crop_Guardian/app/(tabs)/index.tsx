@@ -20,12 +20,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-const colorScheme = useColorScheme() ?? "light";
-const theme = Colors[colorScheme];
 export default function HomeScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { unreadCount, fetchNotifications } = useNotificationStore();
+
+  const colorScheme = useColorScheme() ?? "light";
+  const theme = Colors[colorScheme];
 
   const [userData, setUserData] = useState<any>(null);
   const [myCrops, setMyCrops] = useState<any[]>([]);
@@ -155,7 +156,7 @@ export default function HomeScreen() {
               color={theme.primary}
             />
             {unreadCount > 0 && (
-              <View style={styles.badge}>
+              <View style={[styles.badge, { borderColor: theme.background }]}>
                 <Text style={styles.badgeText}>
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </Text>
@@ -1020,7 +1021,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
-    borderColor: theme.background,
   },
   badgeText: {
     color: "#FFFFFF",

@@ -26,7 +26,7 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
   const theme = Colors[colorScheme];
 
   const handleLoginPress = () => {
-    router.push(loginRoute);
+    router.push(loginRoute as any);
   };
 
   return (

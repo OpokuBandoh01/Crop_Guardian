@@ -23,9 +23,17 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useOnboardingStore } from "@/stores/onboardingStore";
 
+interface RoleOption {
+  readonly id: string;
+  readonly label: string;
+  readonly isIonicon?: boolean;
+  readonly iconName?: string;
+  readonly icon?: any;
+}
+
 // Role Options — kept as a constant outside the component so it is not
 // recreated on every render (micro-optimisation, good habit in React Native).
-const ROLES = [
+const ROLES: readonly RoleOption[] = [
   {
     id: "farmer",
     label: "Farmer",
@@ -48,7 +56,8 @@ const ROLES = [
     isIonicon: true,
     iconName: "ellipsis-horizontal-circle-outline",
   },
-] as const;
+];
+
 
 export default function UserRoleScreen() {
   const router = useRouter();

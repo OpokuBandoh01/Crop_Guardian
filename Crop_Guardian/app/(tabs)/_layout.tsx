@@ -7,6 +7,7 @@ import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 import { HapticTab } from "@/components/haptic-tab";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { useAuthStore } from "@/stores/authStore";
 
 export default function TabLayout() {
@@ -15,6 +16,8 @@ export default function TabLayout() {
 
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
+
+  usePushNotifications();
 
   if (!isAuthenticated) {
     return <Redirect href="/(auth)/login" />;

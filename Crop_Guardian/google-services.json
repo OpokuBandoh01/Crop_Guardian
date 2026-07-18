@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "306847228767",
+    "project_id": "chief-a750e",
+    "storage_bucket": "chief-a750e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:306847228767:android:abfb362e93f225e6650cea",
+        "android_client_info": {
+          "package_name": "com.kojoameyaw519.Crop_Guardian"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBhRjgmyP2_WGYQk27a-V_M0tFB0AzZXM8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

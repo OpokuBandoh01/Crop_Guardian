@@ -1,4 +1,5 @@
 // stores/authStore.ts
+import { unregisterPushToken } from "@/hooks/use-push-notifications";
 import API from "@/services/api";
 import { AppLocation } from "@/utils/utilities";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -53,6 +54,7 @@ export const useAuthStore = create<AuthStore>()(
 
       // logout handler
       logout: () => {
+        unregisterPushToken();
         AsyncStorage.removeItem("userToken").catch(() => {});
         AsyncStorage.removeItem("userData").catch(() => {});
         useOnboardingStore.getState().resetOnboarding();

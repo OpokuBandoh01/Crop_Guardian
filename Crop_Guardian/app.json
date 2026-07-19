@@ -57,7 +57,8 @@
       "router": {},
       "eas": {
         "projectId": "8c8e9389-40a5-4d39-ad1c-d464169927c0"
-      }
+      },
+      "firebaseServiceAccount": "file:./chief-a750e-firebase-adminsdk-fbsvc-1368c9afe2.json"
     },
     "owner": "kojoameyaw519"
   }

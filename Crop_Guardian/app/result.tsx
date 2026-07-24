@@ -19,8 +19,9 @@ import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 //  BlurView for modal backdrop blur
 import { BlurView } from "expo-blur";
 
-import API from "@/services/api";
+import API, { EXPO_PUBLIC_GHANANLP_API_KEY } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
+import axios from "axios";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 
 // TypeScript: describe the shape of the suggestAddToMyCrops object
@@ -150,6 +151,11 @@ export default function ResultScreen() {
   };
 
   //  TTS logic
+  // UPDATED: this now calls GhanaNLP's Khaya AI TTS endpoint directly from the
+  // device instead of going through our Render backend. We're doing this because
+  // Cloudflare in front of translation-api.ghananlp.org blocks Render's
+  // datacenter IP range but allows normal mobile/residential IPs through, so
+  // calling it from the phone itself avoids the block entirely.
   const toggleTts = async () => {
     if (!scanResult) return;
 
@@ -165,21 +171,48 @@ export default function ResultScreen() {
 
     setIsTtsLoading(true);
     try {
-      const response = await API.post("api/tts/generate", {
-        text: descriptionText,
-        language: "tw",
-      });
+      // NEW ADDITION: calling GhanaNLP directly with axios (imported separately
+      // from our own `API` instance, since this request should NOT include our
+      // own backend's Authorization header or baseURL).
+      const response = await axios.post(
+        "https://translation-api.ghananlp.org/tts/v1/synthesize",
+        {
+          text: descriptionText,
+          language: "tw",
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            // TypeScript: process.env.EXPO_PUBLIC_* is typed as string | undefined
+            // by default, so we fall back to an empty string if it's somehow
+            // missing at build time, rather than letting `undefined` reach the header.
+            "Ocp-Apim-Subscription-Key": EXPO_PUBLIC_GHANANLP_API_KEY || "",
+          },
+          responseType: "arraybuffer",
+        },
+      );
 
-      if (
-        response.data.success &&
-        response.data.audioBase64 &&
-        isMounted.current
-      ) {
-        const audioUri = `data:audio/wav;base64,${response.data.audioBase64}`;
+      // Guard: make sure we actually got audio back, not an HTML/JSON error page.
+      const contentType = response.headers["content-type"] || "";
+      if (!contentType.includes("audio")) {
+        console.error("TTS Error: unexpected content-type:", contentType);
+        return;
+      }
+
+      // Convert the raw ArrayBuffer to base64 so it can be used as a data URI.
+      // React Native doesn't have Node's Buffer by default, so we do this
+      // manually with a small binary-to-base64 loop instead of Buffer.from().
+      const bytes = new Uint8Array(response.data);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const audioBase64 = btoa(binary);
+
+      if (isMounted.current) {
+        const audioUri = `data:audio/wav;base64,${audioBase64}`;
         player.replace(audioUri);
         await player.play();
-      } else {
-        console.error("TTS failed:", response.data.message);
       }
     } catch (error) {
       console.error("TTS Error:", error);

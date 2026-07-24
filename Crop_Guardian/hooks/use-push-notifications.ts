@@ -76,8 +76,16 @@ async function registerForPushNotificationsAsync() {
     // Save locally so we know exactly which token to remove on logout
     await AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, expoPushToken);
 
-    // Send it to the backend, tied to whichever user is currently logged in
-    await API.put("/api/notifications/push-token", { token: expoPushToken });
+    // Send it to the backend, tied to whichever user is currently logged in.
+    // UPDATED: skipAuthLogoutOn401 stops a failure on this background call
+    // from ever wiping the user's session (see services/api.ts). Registering
+    // a push token is a nice-to-have, not something that should be able to
+    // bounce a freshly logged-in user back to the login screen.
+    await API.put(
+      "/api/notifications/push-token",
+      { token: expoPushToken },
+      { skipAuthLogoutOn401: true },
+    );
 
     console.log("✅ Push token registered:", expoPushToken);
   } catch (error) {

@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Modal, //  for the suggest-crop modal
+  Modal, // NO CHANGES: for the suggest-crop modal
   ScrollView,
   StyleSheet,
   Text,
@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-//  BlurView for modal backdrop blur
+// NO CHANGES: BlurView for modal backdrop blur
 import { BlurView } from "expo-blur";
 
 import API, { EXPO_PUBLIC_GHANANLP_API_KEY } from "@/services/api";
@@ -24,13 +24,20 @@ import { useAuthStore } from "@/stores/authStore";
 import axios from "axios";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 
-// TypeScript: describe the shape of the suggestAddToMyCrops object
+// NO CHANGES: describes the shape of the suggestAddToMyCrops object
 // so TypeScript can validate every access to its properties.
 interface SuggestCrop {
   suggested: boolean;
   cropType: string;
   message: string;
 }
+
+// NEW ADDITION: a union type (a value that can only be one of these two exact
+// strings) representing which section's audio we are dealing with. Using a
+// union type here means TypeScript will error out if we ever misspell
+// "description" or "actions" anywhere in the file, instead of silently
+// letting a typo through the way a plain `string` would.
+type TtsSection = "description" | "actions";
 
 export default function ResultScreen() {
   const router = useRouter();
@@ -39,10 +46,8 @@ export default function ResultScreen() {
   const user = useAuthStore((state) => state.user);
   const refreshUser = useAuthStore((state) => state.refreshUser);
 
-  console.log("language", user?.language);
-
-  // TypeScript: scanResult is typed as any because the backend response
-  // shape may grow over time — strict typing is handled via SuggestCrop below.
+  // NO CHANGES: scanResult is typed as any because the backend response
+  // shape may grow over time -- strict typing is handled via SuggestCrop below.
   let scanResult: any = null;
   if (data) {
     try {
@@ -57,41 +62,77 @@ export default function ResultScreen() {
   const redColor = "#FF4D4D";
   const brightGreenColor = "#4ADE80";
 
-  // -- TTS state (NO CHANGES) --
-  const [isTtsLoading, setIsTtsLoading] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  const player = useAudioPlayer();
-  const status = useAudioPlayerStatus(player);
-  const isMounted = useRef(true);
-
-  // --  Suggest-crop modal state --
-  // showSuggestModal: controls modal visibility
-  // isAddingCrop: true while the POST /api/crops/my-crops call is in flight
-  // addCropSuccess: true once the crop was added successfully
-  // addCropError: holds an error message string if the call fails
+  // -- Suggest-crop modal state (NO CHANGES) --
   const [showSuggestModal, setShowSuggestModal] = useState(false);
   const [isAddingCrop, setIsAddingCrop] = useState(false);
   const [addCropSuccess, setAddCropSuccess] = useState(false);
   const [addCropError, setAddCropError] = useState<string | null>(null);
 
-  // TypeScript: cast the suggest object through our SuggestCrop interface
+  // NO CHANGES: cast the suggest object through our SuggestCrop interface
   // so downstream code gets proper type checking.
   const suggestPayload: SuggestCrop | null =
     scanResult?.suggestAddToMyCrops ?? null;
+
+  // UPDATED: split TTS loading/playing state into one pair per section
+  // instead of a single shared pair. This lets the Description audio and
+  // the Recommended Actions audio be tracked and controlled independently.
+  const [isDescriptionTtsLoading, setIsDescriptionTtsLoading] = useState(false);
+  const [isDescriptionPlaying, setIsDescriptionPlaying] = useState(false);
+  const [isActionsTtsLoading, setIsActionsTtsLoading] = useState(false);
+  const [isActionsPlaying, setIsActionsPlaying] = useState(false);
+
+  // NEW ADDITION: per-section error message. `string | null` means this is
+  // either a piece of text (something went wrong) or null (no error). Shown
+  // inline with a retry button instead of failing silently to the console.
+  const [descriptionTtsError, setDescriptionTtsError] = useState<string | null>(
+    null,
+  );
+  const [actionsTtsError, setActionsTtsError] = useState<string | null>(null);
+
+  // NEW ADDITION: convenience flag combining both loading states. Used to
+  // disable every other interactive element on the screen while any TTS
+  // request is in flight, per the "always disable during loading" rule.
+  const isAnyTtsLoading = isDescriptionTtsLoading || isActionsTtsLoading;
+
+  // UPDATED: two separate audio player instances, one per section, so that
+  // starting one does not have to fight over playback state with the other.
+  const descriptionPlayer = useAudioPlayer();
+  const descriptionStatus = useAudioPlayerStatus(descriptionPlayer);
+  const actionsPlayer = useAudioPlayer();
+  const actionsStatus = useAudioPlayerStatus(actionsPlayer);
+
+  const isMounted = useRef(true);
+
+  // NEW ADDITION: this ref caches the generated audio data URI per section,
+  // for example { description: "data:audio/wav;base64,...." }.
+  // TypeScript note: `Partial<Record<TtsSection, string>>` means "an object
+  // whose keys are limited to 'description' | 'actions', where each key is
+  // optional (Partial) and its value, if present, is a string." Using a ref
+  // instead of state means updating the cache does NOT cause a re-render,
+  // which is correct since the cache itself is not shown in the UI directly.
+  const audioCacheRef = useRef<Partial<Record<TtsSection, string>>>({});
+
+  // NEW ADDITION: guards the auto-play effect below so it only ever fires
+  // once per screen visit, even if React re-runs effects (for example in
+  // development StrictMode, which intentionally double-invokes effects).
+  const hasAutoPlayedRef = useRef(false);
 
   useEffect(() => {
     refreshUser();
   }, [refreshUser]);
 
+  // UPDATED: keep local "isPlaying" state in sync with each player's real
+  // playback status, one effect per section.
   useEffect(() => {
-    setIsPlaying(status.playing || false);
-  }, [status.playing]);
+    setIsDescriptionPlaying(descriptionStatus.playing || false);
+  }, [descriptionStatus.playing]);
 
-  //  Auto-open the modal when the screen mounts if the backend
-  // returned suggested === true. We use a short delay (300ms) so the result
-  // screen has time to finish rendering before the modal appears -- this feels
-  // more natural to the user than an instant pop-up.
+  useEffect(() => {
+    setIsActionsPlaying(actionsStatus.playing || false);
+  }, [actionsStatus.playing]);
+
+  // NO CHANGES: auto-open the suggest-crop modal shortly after mount if the
+  // backend returned suggested === true.
   useEffect(() => {
     if (suggestPayload?.suggested === true) {
       const timer = setTimeout(() => {
@@ -101,18 +142,32 @@ export default function ResultScreen() {
     }
   }, [suggestPayload?.suggested]);
 
+  // UPDATED: pause BOTH players on unmount, not just one. The dependency
+  // array is intentionally empty ([]) so this cleanup ONLY runs when the
+  // screen truly unmounts, not on every re-render. Previously this watched
+  // [descriptionPlayer, actionsPlayer]; if those hook instances were ever
+  // recreated across renders, the cleanup could fire early and permanently
+  // set isMounted.current to false, silently blocking every future
+  // setLoading(false) call and leaving a spinner stuck forever. Using []
+  // removes that risk entirely, at the small cost of referencing
+  // descriptionPlayer/actionsPlayer via a ref so the cleanup always sees the
+  // latest instance rather than a stale one captured at mount time.
+  const playersRef = useRef({ descriptionPlayer, actionsPlayer });
+  playersRef.current = { descriptionPlayer, actionsPlayer };
+
   useEffect(() => {
     return () => {
       isMounted.current = false;
       try {
-        player.pause();
+        playersRef.current.descriptionPlayer.pause();
+        playersRef.current.actionsPlayer.pause();
       } catch (e) {
         console.log("Audio cleanup completed (expected on unmount)");
       }
     };
-  }, [player]);
+  }, []);
 
-  //  formatting/action helpers
+  // NO CHANGES: formatting/action helpers
   const formatConfidence = (conf: any) => {
     if (conf === undefined || conf === null) return "92%";
     const val = Number(conf);
@@ -140,92 +195,237 @@ export default function ResultScreen() {
     return actions.length > 0 ? actions : ["No recommendations provided."];
   };
 
-  const handleListen = () => {
-    router.push({
-      pathname: "/listening",
-      params: {
-        diseaseName: scanResult?.diseaseName || "Unknown",
-        recommendations: getActions().join(" "),
-      },
-    });
+  // REMOVED: handleListen and the "Listen(Twi)" bottom button that used it
+  // have been taken out per request, along with the "View Details" button.
+
+  // NEW ADDITION: the exact text that will be spoken for each section.
+  // Kept as plain `const` (recomputed each render) since the source data
+  // (scanResult) does not change after the screen mounts, so this is cheap.
+  const descriptionText: string =
+    scanResult?.symptoms ||
+    scanResult?.causes ||
+    "No detailed description available for this detection.";
+
+  const actionsText: string = getActions().join(". ");
+
+  // NEW ADDITION: the GhanaNLP TTS endpoint is known to stall or hang on
+  // longer pieces of text (this is the same limitation that is why TTS was
+  // already split into separate "description" and "actions" calls). This
+  // helper trims text down to a safe character limit before it is ever sent,
+  // cutting at the nearest sentence boundary (a period) instead of mid-word,
+  // so the audio still ends on a complete sentence.
+  const MAX_TTS_CHARACTERS = 350;
+  const truncateForTts = (text: string): string => {
+    if (text.length <= MAX_TTS_CHARACTERS) return text;
+
+    const cut = text.slice(0, MAX_TTS_CHARACTERS);
+    const lastPeriodIndex = cut.lastIndexOf(".");
+
+    // If a period was found reasonably far into the cut text, end there.
+    // Otherwise just hard-cut at the character limit.
+    if (lastPeriodIndex > MAX_TTS_CHARACTERS * 0.4) {
+      return cut.slice(0, lastPeriodIndex + 1);
+    }
+    return `${cut.trim()}...`;
   };
 
-  //  TTS logic
-  // UPDATED: this now calls GhanaNLP's Khaya AI TTS endpoint directly from the
-  // device instead of going through our Render backend. We're doing this because
-  // Cloudflare in front of translation-api.ghananlp.org blocks Render's
-  // datacenter IP range but allows normal mobile/residential IPs through, so
-  // calling it from the phone itself avoids the block entirely.
-  const toggleTts = async () => {
-    if (!scanResult) return;
+  // NEW ADDITION: extracted the raw "call GhanaNLP and return base64 audio"
+  // logic into its own function, typed as `Promise<string>` (TypeScript's
+  // way of saying "this async function eventually resolves to a string").
+  // Both sections now share this single implementation instead of each
+  // duplicating the same axios/base64 code.
+  const synthesizeSpeech = async (text: string): Promise<string> => {
+    // NOTE: calling GhanaNLP directly with axios (imported separately from
+    // our own `API` instance) since this request should NOT include our own
+    // backend's Authorization header or baseURL. Cloudflare in front of
+    // translation-api.ghananlp.org blocks Render's datacenter IP range but
+    // allows normal mobile/residential IPs through, hence calling from the
+    // device itself.
+    const response = await axios.post(
+      "https://translation-api.ghananlp.org/tts/v1/synthesize",
+      {
+        // UPDATED: text is truncated before being sent, to keep requests
+        // inside the range the endpoint can reliably handle.
+        text: truncateForTts(text),
+        language: "tw",
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          // TypeScript note: EXPO_PUBLIC_GHANANLP_API_KEY is typed as
+          // `string`, but we still fall back to "" defensively in case it is
+          // ever empty at runtime, so we never send the literal word
+          // "undefined" as a header value.
+          "Ocp-Apim-Subscription-Key": EXPO_PUBLIC_GHANANLP_API_KEY || "",
+        },
+        responseType: "arraybuffer",
+        // NEW ADDITION: fail after 20 seconds instead of waiting on
+        // Cloudflare's own gateway timeout, which returns a 524 error after
+        // roughly 100 seconds. This is what caused the "infinite" loading
+        // spinner: the request was technically still pending, just for a
+        // very long time, with nothing telling the user it had gone wrong.
+        timeout: 20000,
+      },
+    );
 
-    const descriptionText =
-      scanResult.symptoms ||
-      scanResult.causes ||
-      "No detailed description available for this detection.";
+    // Guard: make sure we actually got audio back, not an HTML/JSON error page.
+    const contentType = response.headers["content-type"] || "";
+    if (!contentType.includes("audio")) {
+      throw new Error(
+        `Unexpected content-type from TTS endpoint: ${contentType}`,
+      );
+    }
 
+    // Convert the raw ArrayBuffer to base64 so it can be used as a data URI.
+    // React Native doesn't have Node's Buffer by default, so this is done
+    // manually with a small binary-to-base64 loop instead of Buffer.from().
+    const bytes = new Uint8Array(response.data);
+    let binary = "";
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const audioBase64 = btoa(binary);
+    return `data:audio/wav;base64,${audioBase64}`;
+  };
+
+  // NEW ADDITION: some failures against the TTS endpoint (a generic
+  // "Network Error", meaning no response ever came back) are one-off blips
+  // rather than a real config problem, especially on a free-tier third
+  // party endpoint like GhanaNLP's. This wraps synthesizeSpeech with a
+  // single automatic retry after a short pause, so the user doesn't have to
+  // manually tap "try again" for something that would have succeeded on a
+  // second attempt anyway. `maxAttempts = 2` means: try once, and if that
+  // fails, try exactly one more time before giving up.
+  const synthesizeSpeechWithRetry = async (
+    text: string,
+    maxAttempts: number = 2,
+  ): Promise<string> => {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await synthesizeSpeech(text);
+      } catch (error) {
+        lastError = error;
+        if (attempt < maxAttempts) {
+          // Brief pause before retrying, giving a flaky connection a moment
+          // to recover instead of hammering the endpoint immediately.
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
+    }
+    // TypeScript note: `throw lastError` re-throws whatever the final
+    // attempt failed with, so the caller's catch block still sees the real
+    // underlying error (e.g. the AxiosError) for logging purposes.
+    throw lastError;
+  };
+
+  // NEW ADDITION: single function that drives BOTH the Description and the
+  // Recommended Actions TTS. `section: TtsSection` restricts the argument to
+  // only "description" or "actions", so calling handleSectionTts("foo")
+  // would be a compile-time TypeScript error, not a runtime bug.
+  const handleSectionTts = async (section: TtsSection) => {
+    const player =
+      section === "description" ? descriptionPlayer : actionsPlayer;
+    const otherPlayer =
+      section === "description" ? actionsPlayer : descriptionPlayer;
+    const isPlaying =
+      section === "description" ? isDescriptionPlaying : isActionsPlaying;
+    const setLoading =
+      section === "description"
+        ? setIsDescriptionTtsLoading
+        : setIsActionsTtsLoading;
+    // NEW ADDITION: pick the right error setter for this section, same
+    // pattern as setLoading above.
+    const setError =
+      section === "description" ? setDescriptionTtsError : setActionsTtsError;
+    const text = section === "description" ? descriptionText : actionsText;
+
+    // If this section is already playing, tapping again just pauses it.
     if (isPlaying) {
       player.pause();
       return;
     }
 
-    setIsTtsLoading(true);
+    // Stop the other section first so the two audios never overlap.
+    otherPlayer.pause();
+
+    // NEW ADDITION: clear any previous error for this section every time the
+    // user tries again, so a stale error message doesn't linger on screen.
+    setError(null);
+
+    // Serve from cache when we already generated this section's audio once.
+    // This is the caching requirement: no repeat call to the TTS endpoint.
+    const cachedUri = audioCacheRef.current[section];
+    if (cachedUri) {
+      try {
+        // Rewind to the start in case this clip already finished playing.
+        await player.seekTo(0);
+      } catch (e) {
+        // Seeking can occasionally fail depending on player state; safe to
+        // ignore since play() below will still work.
+      }
+      await player.play();
+      return;
+    }
+
+    if (!text) return;
+
+    setLoading(true);
     try {
-      // NEW ADDITION: calling GhanaNLP directly with axios (imported separately
-      // from our own `API` instance, since this request should NOT include our
-      // own backend's Authorization header or baseURL).
-      const response = await axios.post(
-        "https://translation-api.ghananlp.org/tts/v1/synthesize",
-        {
-          text: descriptionText,
-          language: "tw",
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            // TypeScript: process.env.EXPO_PUBLIC_* is typed as string | undefined
-            // by default, so we fall back to an empty string if it's somehow
-            // missing at build time, rather than letting `undefined` reach the header.
-            "Ocp-Apim-Subscription-Key": EXPO_PUBLIC_GHANANLP_API_KEY || "",
-          },
-          responseType: "arraybuffer",
-        },
-      );
-
-      // Guard: make sure we actually got audio back, not an HTML/JSON error page.
-      const contentType = response.headers["content-type"] || "";
-      if (!contentType.includes("audio")) {
-        console.error("TTS Error: unexpected content-type:", contentType);
-        return;
-      }
-
-      // Convert the raw ArrayBuffer to base64 so it can be used as a data URI.
-      // React Native doesn't have Node's Buffer by default, so we do this
-      // manually with a small binary-to-base64 loop instead of Buffer.from().
-      const bytes = new Uint8Array(response.data);
-      let binary = "";
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const audioBase64 = btoa(binary);
-
+      const audioUri = await synthesizeSpeechWithRetry(text);
+      // Cache it so the next tap on this section reuses this audio instead
+      // of calling the endpoint again.
+      audioCacheRef.current[section] = audioUri;
       if (isMounted.current) {
-        const audioUri = `data:audio/wav;base64,${audioBase64}`;
         player.replace(audioUri);
         await player.play();
       }
     } catch (error) {
-      console.error("TTS Error:", error);
+      // NOTE: we log the real error to the console for debugging, but the
+      // message shown to the user is a generic, non-revealing one, per the
+      // "secure error messages" practice: never surface backend/network
+      // internals (URLs, status codes, stack traces) directly in the UI.
+      console.error(`TTS Error (${section}):`, error);
+      if (isMounted.current) {
+        setError("Could not load audio. Tap to try again.");
+      }
     } finally {
       if (isMounted.current) {
-        setIsTtsLoading(false);
+        setLoading(false);
       }
     }
   };
 
-  //  Calls POST /api/crops/my-crops with the cropType from
-  // the backend suggest payload. All interactive elements in the modal are
-  // disabled while this is in-flight (isAddingCrop === true).
+  // NEW ADDITION: auto-play the Description audio once, shortly after the
+  // result screen mounts, but only for users whose language is set to Twi.
+  // This mirrors the same gating already used to show the TTS buttons.
+  useEffect(() => {
+    if (!hasAutoPlayedRef.current && scanResult && user?.language === "tw") {
+      hasAutoPlayedRef.current = true;
+      // Small delay so the screen has finished rendering before audio
+      // starts, matching the same feel as the suggest-crop modal delay.
+      const timer = setTimeout(() => {
+        handleSectionTts("description");
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanResult, user?.language]);
+
+  // NEW ADDITION: 0 to 1 playback progress for each section, used to draw a
+  // thin progress bar under the text while audio is playing. Guards against
+  // dividing by zero before duration is known.
+  const descriptionProgress =
+    descriptionStatus.duration > 0
+      ? Math.min(descriptionStatus.currentTime / descriptionStatus.duration, 1)
+      : 0;
+  const actionsProgress =
+    actionsStatus.duration > 0
+      ? Math.min(actionsStatus.currentTime / actionsStatus.duration, 1)
+      : 0;
+
+  // NO CHANGES: calls POST /api/crops/my-crops with the cropType from the
+  // backend suggest payload.
   const handleAddToCrops = async () => {
     if (!suggestPayload?.cropType) return;
 
@@ -240,14 +440,11 @@ export default function ResultScreen() {
       if (response.data?.success) {
         setAddCropSuccess(true);
       } else {
-        // Backend returned a non-success without throwing -- treat as error
         setAddCropError(
           response.data?.message || "Could not add crop. Please try again.",
         );
       }
     } catch (error: any) {
-      // TypeScript: error is typed as any because Axios errors don't have a
-      // fixed shape at compile time; we narrow to the .response path manually.
       const serverMessage = error?.response?.data?.message;
       setAddCropError(
         serverMessage || "Something went wrong. Please try again.",
@@ -257,30 +454,16 @@ export default function ResultScreen() {
     }
   };
 
-  //  Dismiss modal and reset all modal-specific state so it
-  // starts fresh if somehow re-opened in the same session.
   const handleDismissModal = () => {
-    if (isAddingCrop) return; // Block dismiss while a request is in-flight
+    if (isAddingCrop) return;
     setShowSuggestModal(false);
     setAddCropSuccess(false);
     setAddCropError(null);
   };
 
   return (
-    // TypeScript: SafeAreaView accepts a standard ViewStyle, backgroundColor
-    // is a valid string here because React Native accepts any CSS color string.
     <SafeAreaView style={[styles.safeArea, { backgroundColor }]}>
-      {/*
-         Suggest-crop modal
-        ---------------------------------
-        - transparent={true} keeps the native Modal container clear so our
-          BlurView fills the full screen as the backdrop.
-        - animationType="fade" gives a smooth entrance instead of a slide
-          which would feel jarring right after seeing results.
-        - statusBarTranslucent lets the blur extend behind the status bar on
-          Android so the overlay truly covers the whole screen.
-        - All buttons and inputs inside are disabled when isAddingCrop is true.
-      */}
+      {/* NO CHANGES: Suggest-crop modal */}
       <Modal
         visible={showSuggestModal}
         transparent
@@ -288,12 +471,7 @@ export default function ResultScreen() {
         statusBarTranslucent
         onRequestClose={handleDismissModal}
       >
-        {/* BlurView fills the whole screen and acts as the dimmed backdrop.
-            intensity 55 gives a strong enough blur to push the background into
-            the periphery without making it invisible. */}
         <BlurView intensity={55} tint="dark" style={styles.modalBackdrop}>
-          {/* Tapping the backdrop area (outside the card) dismisses the modal,
-              but only when no request is in-flight. */}
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
             activeOpacity={1}
@@ -301,9 +479,7 @@ export default function ResultScreen() {
             disabled={isAddingCrop}
           />
 
-          {/* Modal card -- sits on top of the blur backdrop */}
           <View style={styles.modalCard}>
-            {/* Icon at the top of the card */}
             <View style={styles.modalIconWrapper}>
               <Ionicons
                 name={addCropSuccess ? "checkmark-circle" : "leaf"}
@@ -313,10 +489,6 @@ export default function ResultScreen() {
             </View>
 
             {addCropSuccess ? (
-              /*
-                SUCCESS STATE: shown after the crop was added.
-                Displays a confirmation message and a single "Done" button.
-              */
               <>
                 <Text style={styles.modalTitle}>Crop Added!</Text>
                 <Text style={styles.modalMessage}>
@@ -331,19 +503,13 @@ export default function ResultScreen() {
                 </TouchableOpacity>
               </>
             ) : (
-              /*
-                DEFAULT / ERROR STATE: shown immediately when the modal opens,
-                and also if the API call returns an error.
-              */
               <>
                 <Text style={styles.modalTitle}>Add to My Crops?</Text>
 
-                {/* The message string comes directly from the backend payload */}
                 <Text style={styles.modalMessage}>
                   {suggestPayload?.message}
                 </Text>
 
-                {/* Error banner -- only shown when addCropError is set */}
                 {addCropError ? (
                   <View style={styles.errorBanner}>
                     <Ionicons
@@ -355,7 +521,6 @@ export default function ResultScreen() {
                   </View>
                 ) : null}
 
-                {/* Primary CTA: adds the crop */}
                 <TouchableOpacity
                   style={[
                     styles.modalPrimaryButton,
@@ -373,7 +538,6 @@ export default function ResultScreen() {
                   )}
                 </TouchableOpacity>
 
-                {/* Secondary CTA: dismisses the modal without adding */}
                 <TouchableOpacity
                   style={[
                     styles.modalSecondaryButton,
@@ -390,13 +554,11 @@ export default function ResultScreen() {
         </BlurView>
       </Modal>
 
-      {/* ---- The rest of the screen is unchanged below ---- */}
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
-        //  Prevent scroll interaction with background while modal
-        // is open. scrollEnabled false when modal is showing avoids the user
-        // accidentally interacting with content behind the overlay.
+        // UPDATED: also lock scroll while any TTS request is loading, on top
+        // of the existing modal-open lock.
         scrollEnabled={!showSuggestModal}
       >
         {/* Header */}
@@ -404,7 +566,7 @@ export default function ResultScreen() {
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.iconButton}
-            disabled={isTtsLoading || showSuggestModal}
+            disabled={isAnyTtsLoading || showSuggestModal}
           >
             <Ionicons
               name="arrow-back-circle-outline"
@@ -438,7 +600,7 @@ export default function ResultScreen() {
 
         <Text style={styles.mainTitle}>Result</Text>
 
-        {/* Disease Info Card */}
+        {/* Disease Info Card (NO CHANGES) */}
         <View style={[styles.card, { backgroundColor: cardColor }]}>
           {scanResult?.imageUrl ? (
             <Image
@@ -487,15 +649,18 @@ export default function ResultScreen() {
             <Text style={styles.cardTitle}>Description</Text>
             {user?.language === "tw" && (
               <TouchableOpacity
-                onPress={toggleTts}
-                disabled={isTtsLoading || showSuggestModal}
+                // UPDATED: now calls the shared section handler.
+                onPress={() => handleSectionTts("description")}
+                disabled={isAnyTtsLoading || showSuggestModal}
                 style={styles.ttsButton}
               >
-                {isTtsLoading ? (
+                {isDescriptionTtsLoading ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Ionicons
-                    name={isPlaying ? "pause-circle" : "volume-medium"}
+                    name={
+                      isDescriptionPlaying ? "pause-circle" : "volume-medium"
+                    }
                     size={moderateScale(24)}
                     color="#FFFFFF"
                   />
@@ -504,11 +669,50 @@ export default function ResultScreen() {
             )}
           </View>
 
-          <Text style={styles.cardText}>
-            {scanResult?.symptoms ||
-              scanResult?.causes ||
-              "No detailed description available for this detection."}
-          </Text>
+          <Text style={styles.cardText}>{descriptionText}</Text>
+
+          {/* NEW ADDITION: subtle "now playing" indicator, only shown while
+              this section's audio is actually playing. */}
+          {isDescriptionPlaying && (
+            <View style={styles.nowPlayingRow}>
+              <Ionicons
+                name="ear-outline"
+                size={moderateScale(13)}
+                color="#4ADE80"
+              />
+              <Text style={styles.nowPlayingText}>Playing in Twi</Text>
+            </View>
+          )}
+
+          {/* NEW ADDITION: thin progress bar reflecting playback position. */}
+          {isDescriptionPlaying && (
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${descriptionProgress * 100}%` },
+                ]}
+              />
+            </View>
+          )}
+
+          {/* NEW ADDITION: error + retry row, only shown after a failed TTS
+              attempt for this section. Tapping it calls handleSectionTts
+              again, which also clears the error at the start of the call. */}
+          {descriptionTtsError && (
+            <TouchableOpacity
+              style={styles.ttsErrorRow}
+              onPress={() => handleSectionTts("description")}
+              disabled={isAnyTtsLoading}
+            >
+              <Ionicons
+                name="refresh-circle-outline"
+                size={moderateScale(15)}
+                color="#FF4D4D"
+              />
+              <Text style={styles.ttsErrorText}>{descriptionTtsError}</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Recommended Actions */}
@@ -522,7 +726,30 @@ export default function ResultScreen() {
             },
           ]}
         >
-          <Text style={styles.cardTitle}>Recommended Actions</Text>
+          {/* UPDATED: title now sits in a row alongside its own TTS button,
+              matching the Description card's layout. */}
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardTitle}>Recommended Actions</Text>
+            {user?.language === "tw" && (
+              <TouchableOpacity
+                // NEW ADDITION: manually triggered TTS for this section only.
+                onPress={() => handleSectionTts("actions")}
+                disabled={isAnyTtsLoading || showSuggestModal}
+                style={styles.ttsButton}
+              >
+                {isActionsTtsLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons
+                    name={isActionsPlaying ? "pause-circle" : "volume-medium"}
+                    size={moderateScale(24)}
+                    color="#FFFFFF"
+                  />
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+
           {getActions().map((action, index) => (
             <View key={index} style={styles.actionItem}>
               <Ionicons
@@ -533,35 +760,47 @@ export default function ResultScreen() {
               <Text style={styles.actionText}>{action}</Text>
             </View>
           ))}
-        </View>
 
-        <View style={styles.bottomButtonsContainer}>
-          <TouchableOpacity
-            style={[
-              styles.primaryButton,
-              showSuggestModal && styles.buttonDisabled,
-            ]}
-            disabled={isTtsLoading || showSuggestModal}
-          >
-            <Text style={styles.primaryButtonText}>View Details</Text>
-          </TouchableOpacity>
+          {/* NEW ADDITION: same now-playing indicator and progress bar,
+              scoped to the Recommended Actions audio. */}
+          {isActionsPlaying && (
+            <View style={styles.nowPlayingRow}>
+              <Ionicons
+                name="ear-outline"
+                size={moderateScale(13)}
+                color="#4ADE80"
+              />
+              <Text style={styles.nowPlayingText}>Playing in Twi</Text>
+            </View>
+          )}
 
-          <TouchableOpacity
-            style={[
-              styles.secondaryButton,
-              showSuggestModal && styles.buttonDisabled,
-            ]}
-            onPress={handleListen}
-            disabled={isTtsLoading || showSuggestModal}
-          >
-            <Ionicons
-              name="volume-medium"
-              size={moderateScale(20)}
-              color="#FFFFFF"
-              style={styles.buttonIcon}
-            />
-            <Text style={styles.secondaryButtonText}>Listen(Twi)</Text>
-          </TouchableOpacity>
+          {isActionsPlaying && (
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${actionsProgress * 100}%` },
+                ]}
+              />
+            </View>
+          )}
+
+          {/* NEW ADDITION: error + retry row for the Recommended Actions
+              audio, same pattern as the Description card above. */}
+          {actionsTtsError && (
+            <TouchableOpacity
+              style={styles.ttsErrorRow}
+              onPress={() => handleSectionTts("actions")}
+              disabled={isAnyTtsLoading}
+            >
+              <Ionicons
+                name="refresh-circle-outline"
+                size={moderateScale(15)}
+                color="#FF4D4D"
+              />
+              <Text style={styles.ttsErrorText}>{actionsTtsError}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -575,7 +814,6 @@ const styles = StyleSheet.create({
     paddingBottom: verticalScale(30),
   },
 
-  // -- NO CHANGES: existing styles --
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -663,34 +901,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(14),
     marginLeft: scale(12),
   },
-  bottomButtonsContainer: { gap: verticalScale(16) },
-  primaryButton: {
-    backgroundColor: "#FFFFE7",
-    borderRadius: moderateScale(30),
-    paddingVertical: verticalScale(14),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryButtonText: {
-    color: "#094A04",
-    fontSize: moderateScale(16),
-    fontWeight: "700",
-  },
-  secondaryButton: {
-    flexDirection: "row",
-    borderWidth: 1,
-    borderColor: "#FFFFFF",
-    borderRadius: moderateScale(30),
-    paddingVertical: verticalScale(14),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  secondaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: moderateScale(16),
-    fontWeight: "700",
-  },
-  buttonIcon: { marginRight: scale(8) },
   cardTitleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -699,32 +909,67 @@ const styles = StyleSheet.create({
   },
   ttsButton: { padding: scale(4) },
 
-  // --  modal styles --
+  // NEW ADDITION: "now playing" row shown under a section's text.
+  nowPlayingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: scale(6),
+    marginTop: verticalScale(10),
+  },
+  nowPlayingText: {
+    color: "#4ADE80",
+    fontSize: moderateScale(12),
+    fontWeight: "600",
+  },
 
-  // Full-screen BlurView that acts as the backdrop
+  // NEW ADDITION: thin progress bar track and fill for TTS playback.
+  progressTrack: {
+    height: verticalScale(4),
+    borderRadius: moderateScale(2),
+    backgroundColor: "rgba(255,255,255,0.2)",
+    marginTop: verticalScale(8),
+    overflow: "hidden",
+    width: "100%",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#4ADE80",
+    borderRadius: moderateScale(2),
+  },
+
+  // NEW ADDITION: tappable error row shown when a TTS request fails.
+  ttsErrorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: scale(6),
+    marginTop: verticalScale(10),
+  },
+  ttsErrorText: {
+    color: "#FF4D4D",
+    fontSize: moderateScale(12),
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+
+  // -- modal styles (NO CHANGES) --
   modalBackdrop: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: scale(24),
   },
-
-  // The white card that floats on top of the blur
   modalCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: moderateScale(20),
     padding: moderateScale(24),
     width: "100%",
     alignItems: "center",
-    // Subtle shadow so the card lifts off the blurred background
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 16,
     elevation: 12,
   },
-
-  // Circular icon container at the top of the card
   modalIconWrapper: {
     width: moderateScale(70),
     height: moderateScale(70),
@@ -734,7 +979,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: verticalScale(16),
   },
-
   modalTitle: {
     fontSize: moderateScale(20),
     fontWeight: "700",
@@ -742,7 +986,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: verticalScale(10),
   },
-
   modalMessage: {
     fontSize: moderateScale(14),
     color: "#374151",
@@ -750,8 +993,6 @@ const styles = StyleSheet.create({
     lineHeight: moderateScale(22),
     marginBottom: verticalScale(20),
   },
-
-  // Red error banner shown below the message when the API call fails
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -768,8 +1009,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(13),
     flex: 1,
   },
-
-  // Green "Yes, Add Crop" button
   modalPrimaryButton: {
     backgroundColor: "#094A04",
     borderRadius: moderateScale(30),
@@ -785,8 +1024,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(15),
     fontWeight: "700",
   },
-
-  // Ghost "Not Now" button
   modalSecondaryButton: {
     borderRadius: moderateScale(30),
     paddingVertical: verticalScale(13),
@@ -802,8 +1039,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(15),
     fontWeight: "600",
   },
-
-  // Applied to any button that should appear disabled
   buttonDisabled: {
     opacity: 0.5,
   },

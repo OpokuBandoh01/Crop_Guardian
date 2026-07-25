@@ -140,10 +140,20 @@ export default function ResultScreen() {
     refreshUser();
   }, [refreshUser]);
 
+  // NEW ADDITION: guards the effect below during the disease-name
+  // announcement phase (see handleDescriptionTts further down). During that
+  // phase isDescriptionPlaying is set manually and must NOT be overwritten
+  // by the Twi audio player's status, since the player itself isn't playing
+  // yet at that point.
+  const isAnnouncingNameRef = useRef(false);
+
   // UPDATED: keep local "isPlaying" state in sync with each player's real
-  // playback status, one effect per section.
+  // playback status, one effect per section. The description effect now
+  // skips syncing while the disease name is being announced.
   useEffect(() => {
-    setIsDescriptionPlaying(descriptionStatus.playing || false);
+    if (!isAnnouncingNameRef.current) {
+      setIsDescriptionPlaying(descriptionStatus.playing || false);
+    }
   }, [descriptionStatus.playing]);
 
   useEffect(() => {
@@ -507,17 +517,189 @@ export default function ResultScreen() {
     }
   };
 
-  // UPDATED: auto-play the Description audio once, shortly after the result
-  // screen mounts. Previously this only fired for Twi users; now it fires
-  // for everyone, since English playback is handled on-device via
-  // expo-speech and no longer needs the Twi-only gate.
+  // NEW ADDITION: increments every time a new Description playback sequence
+  // starts. The async sequence below checks this value before moving from
+  // "announce the name" to "read the description" -- if the user stopped
+  // playback (or started it again) in between, the id will have changed,
+  // and the stale sequence knows to stop instead of continuing.
+  const descriptionPlaybackIdRef = useRef(0);
+
+  // NEW ADDITION: wraps Speech.speak in a Promise so we can `await` it
+  // finishing before moving on to the next thing to say. TypeScript note:
+  // `Promise<void>` means "resolves with no value, just signals completion."
+  // onStopped also resolves (not rejects) because a manual stop is not an
+  // error, it just means the sequence should end quietly.
+  const speakOnDevice = (
+    text: string,
+    language: string,
+    onProgress?: (progress: number) => void,
+  ): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      Speech.speak(text, {
+        language,
+        onDone: () => resolve(),
+        onStopped: () => resolve(),
+        onError: (error) =>
+          reject(error instanceof Error ? error : new Error("Speech error")),
+        // TypeScript note: `boundary: any` because the exact event shape can
+        // vary slightly by platform; we only rely on `charIndex`, which is
+        // present everywhere expo-speech runs.
+        onBoundary: onProgress
+          ? (boundary: any) => {
+              if (text.length > 0 && typeof boundary?.charIndex === "number") {
+                onProgress(Math.min(boundary.charIndex / text.length, 1));
+              }
+            }
+          : undefined,
+      });
+    });
+  };
+
+  // NEW ADDITION: this is the Description card's TTS entry point, used by
+  // both the auto-play effect and the manual tap on the speaker icon. Unlike
+  // handleSectionTts above, this ALWAYS announces the disease name first, in
+  // English, on-device, regardless of whether the user's language is Twi or
+  // English -- and only then reads the description itself, in whichever
+  // language the user has set. Recommended Actions is untouched and keeps
+  // using handleSectionTts("actions") exactly as before.
+  const handleDescriptionTts = async () => {
+    // Tapping while already playing (either the name or the description
+    // part) stops the whole sequence immediately.
+    if (isDescriptionPlaying) {
+      isAnnouncingNameRef.current = false;
+      // Invalidate any in-flight sequence so it doesn't continue into the
+      // description after this stop.
+      descriptionPlaybackIdRef.current += 1;
+      Speech.stop();
+      descriptionPlayer.pause();
+      setIsDescriptionPlaying(false);
+      setDescriptionSpeechProgress(0);
+      return;
+    }
+
+    // Stop whatever the Recommended Actions section is doing, so only one
+    // voice is ever active at a time.
+    if (isTwi) {
+      actionsPlayer.pause();
+    } else {
+      Speech.stop();
+    }
+    setIsActionsPlaying(false);
+    setActionsSpeechProgress(0);
+
+    setDescriptionTtsError(null);
+    setDescriptionSpeechProgress(0);
+    setIsDescriptionPlaying(true);
+
+    const playbackId = ++descriptionPlaybackIdRef.current;
+    const diseaseName = scanResult?.diseaseName || "Unknown disease";
+
+    try {
+      // PHASE 1: always announce the disease name in English, on-device,
+      // no matter which language the rest of the screen is in.
+      isAnnouncingNameRef.current = true;
+      await speakOnDevice(`${diseaseName}.`, "en-US");
+      isAnnouncingNameRef.current = false;
+
+      // If the user stopped playback (or triggered a new one) while the
+      // name was still being announced, do not continue into the
+      // description -- this sequence is stale.
+      if (
+        playbackId !== descriptionPlaybackIdRef.current ||
+        !isMounted.current
+      ) {
+        return;
+      }
+
+      if (isTwi) {
+        // PHASE 2 (Twi): hand off to the existing GhanaNLP cache/network
+        // flow for the description text itself, unchanged from before.
+        const cachedUri = audioCacheRef.current.description;
+        if (cachedUri) {
+          try {
+            await descriptionPlayer.seekTo(0);
+          } catch (e) {
+            // Safe to ignore; play() below still works even if seek fails.
+          }
+          await descriptionPlayer.play();
+          return;
+        }
+
+        if (!descriptionText) {
+          setIsDescriptionPlaying(false);
+          return;
+        }
+
+        setIsDescriptionTtsLoading(true);
+        try {
+          const audioUri = await synthesizeSpeechWithRetry(descriptionText);
+          audioCacheRef.current.description = audioUri;
+          if (
+            playbackId === descriptionPlaybackIdRef.current &&
+            isMounted.current
+          ) {
+            descriptionPlayer.replace(audioUri);
+            await descriptionPlayer.play();
+          }
+        } catch (error) {
+          console.error("TTS Error (description):", error);
+          if (
+            playbackId === descriptionPlaybackIdRef.current &&
+            isMounted.current
+          ) {
+            setDescriptionTtsError("Could not load audio. Tap to try again.");
+            setIsDescriptionPlaying(false);
+          }
+        } finally {
+          if (
+            playbackId === descriptionPlaybackIdRef.current &&
+            isMounted.current
+          ) {
+            setIsDescriptionTtsLoading(false);
+          }
+        }
+      } else {
+        // PHASE 2 (English): continue speaking the description text itself
+        // on the same on-device engine (the name was already spoken above).
+        if (descriptionText) {
+          await speakOnDevice(descriptionText, "en-US", (progress) => {
+            if (playbackId === descriptionPlaybackIdRef.current) {
+              setDescriptionSpeechProgress(progress);
+            }
+          });
+        }
+        if (playbackId === descriptionPlaybackIdRef.current) {
+          setIsDescriptionPlaying(false);
+          setDescriptionSpeechProgress(0);
+        }
+      }
+    } catch (error) {
+      // Covers a failure during the name announcement itself (rare, but
+      // possible if the device's TTS engine errors out).
+      console.error("TTS Error (description name announcement):", error);
+      isAnnouncingNameRef.current = false;
+      if (
+        playbackId === descriptionPlaybackIdRef.current &&
+        isMounted.current
+      ) {
+        setDescriptionTtsError("Could not play audio. Tap to try again.");
+        setIsDescriptionPlaying(false);
+      }
+    }
+  };
+
+  // UPDATED: auto-play the Description sequence (disease name, then the
+  // description itself) once, shortly after the result screen mounts. Fires
+  // for everyone regardless of language, since the name is always announced
+  // in English on-device and the description then follows in whichever
+  // language the user has set.
   useEffect(() => {
     if (!hasAutoPlayedRef.current && scanResult) {
       hasAutoPlayedRef.current = true;
       // Small delay so the screen has finished rendering before audio
       // starts, matching the same feel as the suggest-crop modal delay.
       const timer = setTimeout(() => {
-        handleSectionTts("description");
+        handleDescriptionTts();
       }, 400);
       return () => clearTimeout(timer);
     }
@@ -763,10 +945,11 @@ export default function ResultScreen() {
         >
           <View style={styles.cardTitleRow}>
             <Text style={styles.cardTitle}>Description</Text>
-            {/* UPDATED: shown for all users now, not just Twi, since
-                English playback is handled on-device via expo-speech. */}
+            {/* UPDATED: now calls handleDescriptionTts, which always
+                announces the disease name in English first, then continues
+                into the description in whichever language is set. */}
             <TouchableOpacity
-              onPress={() => handleSectionTts("description")}
+              onPress={handleDescriptionTts}
               disabled={isAnyTtsLoading || showSuggestModal}
               style={styles.ttsButton}
             >
@@ -813,12 +996,12 @@ export default function ResultScreen() {
           )}
 
           {/* NEW ADDITION: error + retry row, only shown after a failed TTS
-              attempt for this section. Tapping it calls handleSectionTts
+              attempt for this section. Tapping it calls handleDescriptionTts
               again, which also clears the error at the start of the call. */}
           {descriptionTtsError && (
             <TouchableOpacity
               style={styles.ttsErrorRow}
-              onPress={() => handleSectionTts("description")}
+              onPress={handleDescriptionTts}
               disabled={isAnyTtsLoading}
             >
               <Ionicons

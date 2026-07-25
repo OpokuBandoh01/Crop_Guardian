@@ -11,6 +11,7 @@ import * as Notifications from "expo-notifications";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef } from "react";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import "react-native-reanimated";
 
 // Without this, Android/iOS won't show a banner while the app is in the foreground.
@@ -63,40 +64,45 @@ export default function RootLayout() {
   }, [fetchNotifications, router]);
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="scan" options={{ headerShown: false }} />
-        <Stack.Screen name="result" options={{ headerShown: false }} />
-        <Stack.Screen name="weather" options={{ headerShown: false }} />
-        <Stack.Screen name="listening" options={{ headerShown: false }} />
-        <Stack.Screen name="personal-info" options={{ headerShown: false }} />
-        <Stack.Screen name="farm-info" options={{ headerShown: false }} />
-        <Stack.Screen name="change-password" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="offline-database"
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen name="appearance" options={{ headerShown: false }} />
-        <Stack.Screen name="language" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="notification-settings"
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen name="unit-settings" options={{ headerShown: false }} />
-        <Stack.Screen name="help-support" options={{ headerShown: false }} />
-        <Stack.Screen name="about-us" options={{ headerShown: false }} />
-        <Stack.Screen name="rate-us" options={{ headerShown: false }} />
-        {/* <Stack.Screen name="logout" options={{ headerShown: false }} /> */}
-        <Stack.Screen
-          name="modal"
-          options={{ presentation: "modal", title: "Modal" }}
-        />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <KeyboardProvider>
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="scan" options={{ headerShown: false }} />
+          <Stack.Screen name="result" options={{ headerShown: false }} />
+          <Stack.Screen name="weather" options={{ headerShown: false }} />
+          <Stack.Screen name="listening" options={{ headerShown: false }} />
+          <Stack.Screen name="personal-info" options={{ headerShown: false }} />
+          <Stack.Screen name="farm-info" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="change-password"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="offline-database"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen name="appearance" options={{ headerShown: false }} />
+          <Stack.Screen name="language" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="notification-settings"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen name="unit-settings" options={{ headerShown: false }} />
+          <Stack.Screen name="help-support" options={{ headerShown: false }} />
+          <Stack.Screen name="about-us" options={{ headerShown: false }} />
+          <Stack.Screen name="rate-us" options={{ headerShown: false }} />
+          {/* <Stack.Screen name="logout" options={{ headerShown: false }} /> */}
+          <Stack.Screen
+            name="modal"
+            options={{ presentation: "modal", title: "Modal" }}
+          />
+        </Stack>
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    </KeyboardProvider>
   );
 }

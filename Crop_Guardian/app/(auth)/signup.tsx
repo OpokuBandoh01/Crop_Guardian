@@ -8,12 +8,12 @@ import { Controller, useForm } from "react-hook-form";
 import {
   Alert,
   Image,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
@@ -283,11 +283,14 @@ export default function SignUpScreen() {
       // Only protect top — bottom is handled by ScrollView padding
       edges={["top", "left", "right"]}
     >
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         scrollEnabled={!isLoading}
         keyboardShouldPersistTaps="handled"
+        // bottomOffset adds extra space between the focused input and the
+        // keyboard's top edge so the input+its error text isn't hugging the keyboard
+        bottomOffset={40}
       >
         {/* Logo */}
         <View style={styles.logoContainer}>
@@ -629,7 +632,7 @@ export default function SignUpScreen() {
             </TouchableOpacity>
           </Link>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* ── Location Edit Modal ──
           Rendered outside ScrollView so it floats over the entire screen.

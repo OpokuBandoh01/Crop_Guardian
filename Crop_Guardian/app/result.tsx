@@ -23,6 +23,11 @@ import API, { EXPO_PUBLIC_GHANANLP_API_KEY } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 import axios from "axios";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+// NEW ADDITION: on-device text-to-speech for English. Unlike the GhanaNLP
+// path used for Twi, this speaks directly through the phone's own TTS
+// engine: no network call, no API quota, and no practical length limit
+// worth truncating for.
+import * as Speech from "expo-speech";
 
 // NO CHANGES: describes the shape of the suggestAddToMyCrops object
 // so TypeScript can validate every access to its properties.
@@ -81,6 +86,12 @@ export default function ResultScreen() {
   const [isActionsTtsLoading, setIsActionsTtsLoading] = useState(false);
   const [isActionsPlaying, setIsActionsPlaying] = useState(false);
 
+  // NEW ADDITION: which TTS engine to use is decided once per render based
+  // on the user's saved language. `isTwi` being a plain boolean (not a
+  // string comparison repeated everywhere) makes every branch below read
+  // clearly as "Twi path" vs "English path".
+  const isTwi = user?.language === "tw";
+
   // NEW ADDITION: per-section error message. `string | null` means this is
   // either a piece of text (something went wrong) or null (no error). Shown
   // inline with a retry button instead of failing silently to the console.
@@ -88,6 +99,14 @@ export default function ResultScreen() {
     null,
   );
   const [actionsTtsError, setActionsTtsError] = useState<string | null>(null);
+
+  // NEW ADDITION: expo-speech has no currentTime/duration to read (unlike
+  // expo-audio's player status), so we track playback progress ourselves,
+  // updated from the onBoundary callback as each word is spoken. Only used
+  // on the English path; the Twi path keeps using descriptionStatus /
+  // actionsStatus from expo-audio further below.
+  const [descriptionSpeechProgress, setDescriptionSpeechProgress] = useState(0);
+  const [actionsSpeechProgress, setActionsSpeechProgress] = useState(0);
 
   // NEW ADDITION: convenience flag combining both loading states. Used to
   // disable every other interactive element on the screen while any TTS
@@ -161,6 +180,9 @@ export default function ResultScreen() {
       try {
         playersRef.current.descriptionPlayer.pause();
         playersRef.current.actionsPlayer.pause();
+        // NEW ADDITION: also stop any in-progress on-device speech (the
+        // English path), so navigating away doesn't leave the phone talking.
+        Speech.stop();
       } catch (e) {
         console.log("Audio cleanup completed (expected on unmount)");
       }
@@ -319,11 +341,100 @@ export default function ResultScreen() {
     throw lastError;
   };
 
+  // NOTE: isTwi was already declared near the top of the component, right
+  // after the loading/playing state. Referenced here to decide which TTS
+  // engine handleSectionTts uses below.
+
+  // NEW ADDITION: speaks the full section text on-device via expo-speech.
+  // Unlike the GhanaNLP path, this needs no network call, no caching, and no
+  // text truncation, since expo-speech has no request quota and handles far
+  // more characters than either of our sections will ever contain.
+  const speakEnglishSection = (section: TtsSection) => {
+    const isPlaying =
+      section === "description" ? isDescriptionPlaying : isActionsPlaying;
+    const setPlaying =
+      section === "description" ? setIsDescriptionPlaying : setIsActionsPlaying;
+    const setOtherPlaying =
+      section === "description" ? setIsActionsPlaying : setIsDescriptionPlaying;
+    const setError =
+      section === "description" ? setDescriptionTtsError : setActionsTtsError;
+    // NEW ADDITION: progress setter for this section, driven by onBoundary
+    // below since expo-speech has no currentTime/duration to read directly.
+    const setProgress =
+      section === "description"
+        ? setDescriptionSpeechProgress
+        : setActionsSpeechProgress;
+    const setOtherProgress =
+      section === "description"
+        ? setActionsSpeechProgress
+        : setDescriptionSpeechProgress;
+    const text = section === "description" ? descriptionText : actionsText;
+
+    // NOTE: Speech.stop() interrupts whatever is currently speaking. We call
+    // it unconditionally before starting a new utterance so tapping one
+    // section always stops the other, keeping only one voice active at a
+    // time (mirrors the otherPlayer.pause() behaviour in the Twi path).
+    Speech.stop();
+    setOtherPlaying(false);
+    setOtherProgress(0);
+
+    // Tapping the same section again while it is speaking just stops it,
+    // matching the "tap to pause/stop" behaviour of the Twi buttons. Note:
+    // Speech.pause() only works on iOS and web (not Android), so we use
+    // stop() everywhere for consistent cross-platform behaviour.
+    if (isPlaying) {
+      setPlaying(false);
+      setProgress(0);
+      return;
+    }
+
+    if (!text) return;
+
+    setError(null);
+    setPlaying(true);
+    setProgress(0);
+
+    Speech.speak(text, {
+      language: "en-US",
+      onDone: () => {
+        setPlaying(false);
+        setProgress(0);
+      },
+      onStopped: () => {
+        setPlaying(false);
+        setProgress(0);
+      },
+      onError: () => {
+        setPlaying(false);
+        setProgress(0);
+        // Secure, generic error message, same pattern as the Twi path.
+        setError("Could not play audio. Tap to try again.");
+      },
+      // NEW ADDITION: fires as each word is reached. `boundary` is typed as
+      // `any` here because its exact shape can vary slightly by platform,
+      // but we only need `charIndex`, which every platform provides. Used
+      // to drive the same progress bar the Twi path shows, just computed
+      // from character position instead of audio currentTime/duration.
+      onBoundary: (boundary: any) => {
+        if (text.length > 0 && typeof boundary?.charIndex === "number") {
+          setProgress(Math.min(boundary.charIndex / text.length, 1));
+        }
+      },
+    });
+  };
+
   // NEW ADDITION: single function that drives BOTH the Description and the
   // Recommended Actions TTS. `section: TtsSection` restricts the argument to
   // only "description" or "actions", so calling handleSectionTts("foo")
   // would be a compile-time TypeScript error, not a runtime bug.
   const handleSectionTts = async (section: TtsSection) => {
+    // UPDATED: English users are routed to the on-device engine and never
+    // touch the GhanaNLP network path below.
+    if (!isTwi) {
+      speakEnglishSection(section);
+      return;
+    }
+
     const player =
       section === "description" ? descriptionPlayer : actionsPlayer;
     const otherPlayer =
@@ -396,11 +507,12 @@ export default function ResultScreen() {
     }
   };
 
-  // NEW ADDITION: auto-play the Description audio once, shortly after the
-  // result screen mounts, but only for users whose language is set to Twi.
-  // This mirrors the same gating already used to show the TTS buttons.
+  // UPDATED: auto-play the Description audio once, shortly after the result
+  // screen mounts. Previously this only fired for Twi users; now it fires
+  // for everyone, since English playback is handled on-device via
+  // expo-speech and no longer needs the Twi-only gate.
   useEffect(() => {
-    if (!hasAutoPlayedRef.current && scanResult && user?.language === "tw") {
+    if (!hasAutoPlayedRef.current && scanResult) {
       hasAutoPlayedRef.current = true;
       // Small delay so the screen has finished rendering before audio
       // starts, matching the same feel as the suggest-crop modal delay.
@@ -413,16 +525,20 @@ export default function ResultScreen() {
   }, [scanResult, user?.language]);
 
   // NEW ADDITION: 0 to 1 playback progress for each section, used to draw a
-  // thin progress bar under the text while audio is playing. Guards against
-  // dividing by zero before duration is known.
-  const descriptionProgress =
-    descriptionStatus.duration > 0
+  // thin progress bar under the text while audio is playing. For Twi this
+  // reads from expo-audio's real currentTime/duration; for English there is
+  // no such status to read, so it falls back to the onBoundary-driven
+  // percentage tracked in descriptionSpeechProgress / actionsSpeechProgress.
+  const descriptionProgress = isTwi
+    ? descriptionStatus.duration > 0
       ? Math.min(descriptionStatus.currentTime / descriptionStatus.duration, 1)
-      : 0;
-  const actionsProgress =
-    actionsStatus.duration > 0
+      : 0
+    : descriptionSpeechProgress;
+  const actionsProgress = isTwi
+    ? actionsStatus.duration > 0
       ? Math.min(actionsStatus.currentTime / actionsStatus.duration, 1)
-      : 0;
+      : 0
+    : actionsSpeechProgress;
 
   // NO CHANGES: calls POST /api/crops/my-crops with the cropType from the
   // backend suggest payload.
@@ -647,32 +763,30 @@ export default function ResultScreen() {
         >
           <View style={styles.cardTitleRow}>
             <Text style={styles.cardTitle}>Description</Text>
-            {user?.language === "tw" && (
-              <TouchableOpacity
-                // UPDATED: now calls the shared section handler.
-                onPress={() => handleSectionTts("description")}
-                disabled={isAnyTtsLoading || showSuggestModal}
-                style={styles.ttsButton}
-              >
-                {isDescriptionTtsLoading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Ionicons
-                    name={
-                      isDescriptionPlaying ? "pause-circle" : "volume-medium"
-                    }
-                    size={moderateScale(24)}
-                    color="#FFFFFF"
-                  />
-                )}
-              </TouchableOpacity>
-            )}
+            {/* UPDATED: shown for all users now, not just Twi, since
+                English playback is handled on-device via expo-speech. */}
+            <TouchableOpacity
+              onPress={() => handleSectionTts("description")}
+              disabled={isAnyTtsLoading || showSuggestModal}
+              style={styles.ttsButton}
+            >
+              {isDescriptionTtsLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Ionicons
+                  name={isDescriptionPlaying ? "pause-circle" : "volume-medium"}
+                  size={moderateScale(24)}
+                  color="#FFFFFF"
+                />
+              )}
+            </TouchableOpacity>
           </View>
 
           <Text style={styles.cardText}>{descriptionText}</Text>
 
           {/* NEW ADDITION: subtle "now playing" indicator, only shown while
-              this section's audio is actually playing. */}
+              this section's audio is actually playing. Label reflects
+              which engine is speaking. */}
           {isDescriptionPlaying && (
             <View style={styles.nowPlayingRow}>
               <Ionicons
@@ -680,7 +794,9 @@ export default function ResultScreen() {
                 size={moderateScale(13)}
                 color="#4ADE80"
               />
-              <Text style={styles.nowPlayingText}>Playing in Twi</Text>
+              <Text style={styles.nowPlayingText}>
+                {isTwi ? "Playing in Twi" : "Playing"}
+              </Text>
             </View>
           )}
 
@@ -726,28 +842,27 @@ export default function ResultScreen() {
             },
           ]}
         >
-          {/* UPDATED: title now sits in a row alongside its own TTS button,
-              matching the Description card's layout. */}
+          {/* UPDATED: title sits in a row alongside its own TTS button,
+              matching the Description card's layout. Now shown for all
+              users, not just Twi. */}
           <View style={styles.cardTitleRow}>
             <Text style={styles.cardTitle}>Recommended Actions</Text>
-            {user?.language === "tw" && (
-              <TouchableOpacity
-                // NEW ADDITION: manually triggered TTS for this section only.
-                onPress={() => handleSectionTts("actions")}
-                disabled={isAnyTtsLoading || showSuggestModal}
-                style={styles.ttsButton}
-              >
-                {isActionsTtsLoading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Ionicons
-                    name={isActionsPlaying ? "pause-circle" : "volume-medium"}
-                    size={moderateScale(24)}
-                    color="#FFFFFF"
-                  />
-                )}
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              // NEW ADDITION: manually triggered TTS for this section only.
+              onPress={() => handleSectionTts("actions")}
+              disabled={isAnyTtsLoading || showSuggestModal}
+              style={styles.ttsButton}
+            >
+              {isActionsTtsLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Ionicons
+                  name={isActionsPlaying ? "pause-circle" : "volume-medium"}
+                  size={moderateScale(24)}
+                  color="#FFFFFF"
+                />
+              )}
+            </TouchableOpacity>
           </View>
 
           {getActions().map((action, index) => (
@@ -770,7 +885,9 @@ export default function ResultScreen() {
                 size={moderateScale(13)}
                 color="#4ADE80"
               />
-              <Text style={styles.nowPlayingText}>Playing in Twi</Text>
+              <Text style={styles.nowPlayingText}>
+                {isTwi ? "Playing in Twi" : "Playing"}
+              </Text>
             </View>
           )}
 

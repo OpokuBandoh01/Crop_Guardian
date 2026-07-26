@@ -3,12 +3,10 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Print from "expo-print";
 import { useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Animated,
-  Easing,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -21,271 +19,182 @@ import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import API from "@/services/api";
-import { getLocationName, getWeatherIcon } from "@/utils/utilities";
-import * as Location from "expo-location";
-
-interface BackendCurrent {
-  temperature_2m: number;
-  relative_humidity_2m: number;
-  apparent_temperature: number;
-  precipitation: number;
-  weather_code: number;
-  weatherDescription: string;
-}
-
-interface DailyData {
-  time: string[];
-  temperature_2m_max: number[];
-  temperature_2m_min: number[];
-  precipitation_sum: number[];
-  precipitation_probability_max: number[];
-  weather_code: number[];
-  weatherDescriptions: string[];
-}
-
-interface RiskInsight {
-  crop: string;
-  riskLevel: string;
-  message: string;
-  factors: string[];
-}
-
-interface WeatherResponse {
-  current: BackendCurrent;
-  overallSummary: string;
-  daily: DailyData;
-  riskInsights: RiskInsight[];
-}
-
-// NEW ADDITION: small typed prop contract for the reusable skeleton box,
-// so every call site is forced to pass valid width/height values instead
-// of "any" shaped object.
-interface SkeletonBoxProps {
-  width: number | string;
-  height: number;
-  borderRadius?: number;
-  style?: object;
-}
-
-// Skeleton loader shown while the first request is in flight.
-// UPDATED: restyled to use the app's surface color and cream background
-// instead of a generic gray, so the loading state already feels on brand.
-const SkeletonLoader = ({
-  backgroundColor,
-  surfaceColor,
-}: {
-  backgroundColor: string;
-  surfaceColor: string;
-}) => {
-  // useRef keeps the same Animated.Value across re-renders instead of
-  // creating a brand new one on every render, which would restart the loop.
-  const opacity = useRef(new Animated.Value(0.35)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.35,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]),
-    ).start();
-  }, [opacity]);
-
-  // SkeletonBoxProps used here so this inline component is type checked too.
-  const SkeletonBox = ({
-    width,
-    height,
-    borderRadius = 12,
-    style,
-  }: SkeletonBoxProps) => (
-    <Animated.View
-      style={[
-        styles.skeletonBox,
-        { width, height, borderRadius, opacity },
-        style,
-      ]}
-    />
-  );
-
-  return (
-    <SafeAreaView
-      style={[styles.safeArea, { backgroundColor }]}
-      edges={["top", "left", "right"]}
-    >
-      <View style={styles.headerContainer}>
-        <View style={styles.backButtonSkeleton} />
-        <SkeletonBox width={140} height={20} />
-        <View style={styles.rightSpacer} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Current weather hero skeleton */}
-        <View
-          style={[
-            styles.currentCard,
-            { backgroundColor: surfaceColor, alignItems: "center" },
-          ]}
-        >
-          <SkeletonBox width={80} height={80} borderRadius={40} />
-          <SkeletonBox width={110} height={48} style={{ marginTop: 14 }} />
-          <SkeletonBox width={150} height={18} style={{ marginTop: 10 }} />
-          <SkeletonBox width={120} height={14} style={{ marginTop: 8 }} />
-        </View>
-
-        {/* Summary skeleton */}
-        <View style={[styles.summaryCard, { backgroundColor: surfaceColor }]}>
-          <SkeletonBox width={140} height={16} />
-          <SkeletonBox width="90%" height={50} style={{ marginTop: 12 }} />
-        </View>
-
-        {/* Daily forecast skeleton */}
-        <View style={styles.section}>
-          <SkeletonBox width={150} height={16} />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ marginTop: 12 }}
-          >
-            {[1, 2, 3, 4, 5].map((i) => (
-              <View
-                key={i}
-                style={[
-                  styles.dailyCard,
-                  { backgroundColor: surfaceColor, alignItems: "center" },
-                ]}
-              >
-                <SkeletonBox width={46} height={14} />
-                <SkeletonBox
-                  width={32}
-                  height={32}
-                  borderRadius={16}
-                  style={{ marginVertical: 8 }}
-                />
-                <SkeletonBox width={60} height={16} />
-                <SkeletonBox width={44} height={12} style={{ marginTop: 6 }} />
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Risk insights skeleton */}
-        <View style={styles.section}>
-          <SkeletonBox width={170} height={16} />
-          {[1, 2].map((i) => (
-            <View
-              key={i}
-              style={[styles.riskCard, { backgroundColor: surfaceColor }]}
-            >
-              <View style={styles.riskHeader}>
-                <SkeletonBox width={80} height={18} />
-                <SkeletonBox width={50} height={18} />
-              </View>
-              <SkeletonBox width="95%" height={14} style={{ marginTop: 10 }} />
-              <SkeletonBox width="70%" height={14} style={{ marginTop: 6 }} />
-            </View>
-          ))}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-};
+import { useWeatherStore } from "@/stores/weatherStore"; // NEW ADDITION: shared 15 minute cache store
+import { getWeatherIcon } from "@/utils/utilities";
 
 export default function WeatherPage() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
 
-  // useState<WeatherResponse | null> tells TypeScript this value is EITHER
-  // a fully shaped WeatherResponse OR null, nothing else. This stops us from
-  // accidentally reading weatherData.current before data has arrived.
-  const [weatherData, setWeatherData] = useState<WeatherResponse | null>(null);
-  const [locationName, setLocationName] = useState<string>(
-    "Detecting location...",
-  );
+  // Reading slices individually from the shared store rather than one big
+  // object, this keeps re-renders limited to only the piece that changed.
+  const weatherData = useWeatherStore((state) => state.weatherData);
+  const locationName = useWeatherStore((state) => state.locationName);
+  const fetchedAt = useWeatherStore((state) => state.fetchedAt);
+  const loading = useWeatherStore((state) => state.loading);
+  const permissionDenied = useWeatherStore((state) => state.permissionDenied);
+  const fetchWeather = useWeatherStore((state) => state.fetchWeather);
+
   const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [permissionDenied, setPermissionDenied] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
-  // NEW ADDITION: tracks the PDF export specifically, separate from the
-  // main "loading" flag, so exporting a PDF does not show the full page
-  // skeleton again, it only disables the export button itself.
+  // Tracks the PDF export specifically, separate from data loading, so
+  // exporting a PDF only disables the export button, not the whole screen.
   const [exportingPdf, setExportingPdf] = useState<boolean>(false);
 
-  // Derived flag used everywhere to disable buttons/touchables while ANY
-  // async operation is running, per the "always disable while loading" rule.
+  // Derived flag used to disable buttons/touchables while ANY async
+  // operation is running, per the "always disable while loading" rule.
   const isBusy = loading || refreshing || exportingPdf;
 
-  const fetchWeather = async () => {
-    try {
-      setLoading(true);
-      setPermissionDenied(false);
-
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        setPermissionDenied(true);
-        setLoading(false);
-        return;
-      }
-
-      const loc = await Location.getCurrentPositionAsync({});
-      const name = await getLocationName(
-        loc.coords.latitude,
-        loc.coords.longitude,
-      );
-      setLocationName(name);
-
-      const res = await API.get("/api/weather/forecast", {
-        params: { lat: loc.coords.latitude, lon: loc.coords.longitude },
-      });
-
-      if (res.data?.success && res.data.data) {
-        setWeatherData(res.data.data);
-      }
-    } catch (err) {
-      // UPDATED: secure, generic message shown to the user. The detailed
-      // error stays in console.error only, so we never leak backend or
-      // stack trace details to the UI.
-      console.error("Weather Page Error:", err);
-      Alert.alert("Unable to load weather", "Please try again in a moment.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // On mount, ask the store for data. If a fresh cached result already
+  // exists (from the Home screen widget, or a previous visit within the
+  // last 15 minutes), this resolves instantly with no network call.
+  useEffect(() => {
+    fetchWeather();
+  }, [fetchWeather]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchWeather();
+    // force: true intentionally bypasses the cache here, pull-to-refresh
+    // is the one explicit user action that should always hit the network.
+    await fetchWeather({ force: true });
     setRefreshing(false);
-  }, []);
+  }, [fetchWeather]);
 
-  useEffect(() => {
-    fetchWeather();
-  }, []);
+  // Builds the actual PDF HTML from real weatherData, previous version of
+  // this file had a placeholder string "..." here which is why the export
+  // was silently producing an empty/broken PDF.
+  const buildReportHtml = (): string => {
+    if (!weatherData)
+      return "<html><body><p>No weather data available.</p></body></html>";
+
+    const { current, daily, riskInsights, overallSummary } = weatherData;
+
+    // Build each daily forecast row as an HTML table row string.
+    const dailyRows = daily.time
+      .map((date, index) => {
+        const dayLabel =
+          index === 0
+            ? "Today"
+            : new Date(date).toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+              });
+        return `
+          <tr>
+            <td>${dayLabel}</td>
+            <td>${daily.weatherDescriptions[index] ?? "Unknown"}</td>
+            <td>${Math.round(daily.temperature_2m_max[index])}° / ${Math.round(
+              daily.temperature_2m_min[index],
+            )}°</td>
+            <td>${daily.precipitation_probability_max[index]}%</td>
+          </tr>`;
+      })
+      .join("");
+
+    // Build each crop risk insight as an HTML block.
+    const riskBlocks = riskInsights
+      .map(
+        (insight) => `
+          <div class="risk-card">
+            <div class="risk-header">
+              <span class="risk-crop">${insight.crop}</span>
+              <span class="risk-level risk-${insight.riskLevel.toLowerCase()}">${insight.riskLevel}</span>
+            </div>
+            <p class="risk-message">${insight.message}</p>
+            ${
+              insight.factors.length > 0
+                ? `<p class="risk-factors">Factors: ${insight.factors.join(", ")}</p>`
+                : ""
+            }
+          </div>`,
+      )
+      .join("");
+
+    // Full HTML document. Inline styles only, since expo-print renders this
+    // as a standalone document, it does not have access to app stylesheets.
+    return `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <style>
+            body { font-family: -apple-system, Helvetica, Arial, sans-serif; padding: 24px; color: #11181C; }
+            h1 { color: #094A04; font-size: 22px; margin-bottom: 4px; }
+            .subtitle { color: #687076; font-size: 13px; margin-bottom: 20px; }
+            .current-card { background: #EBF7E9; border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+            .current-temp { font-size: 36px; font-weight: 700; color: #094A04; margin: 4px 0; }
+            .summary-card { background: #F9FAFB; border-radius: 12px; padding: 16px; margin-bottom: 20px; font-size: 13px; line-height: 19px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            th, td { text-align: left; padding: 8px; font-size: 12px; border-bottom: 1px solid #E5E7EB; }
+            th { color: #094A04; }
+            .risk-card { border: 1px solid #E5E7EB; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+            .risk-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
+            .risk-crop { font-weight: 700; font-size: 13px; }
+            .risk-level { font-weight: 700; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+            .risk-low { background: #EBF7E9; color: #2E7D32; }
+            .risk-medium { background: #FFFCE2; color: #E4A11B; }
+            .risk-high { background: #FEEAEA; color: #EF4444; }
+            .risk-message { font-size: 12px; margin: 4px 0; }
+            .risk-factors { font-size: 11px; color: #687076; }
+            .footer { font-size: 10px; color: #9CA3AF; margin-top: 24px; }
+          </style>
+        </head>
+        <body>
+          <h1>Crop Guardian Weather Report</h1>
+          <p class="subtitle">${locationName} &middot; Generated ${new Date().toLocaleString()}</p>
+
+          <div class="current-card">
+            <div class="current-temp">${Math.round(current.temperature_2m)}&deg;C</div>
+            <p>${current.weatherDescription}</p>
+            <p>Feels like ${Math.round(current.apparent_temperature)}&deg;C &middot; Humidity ${current.relative_humidity_2m}%</p>
+          </div>
+
+          <h3>Today's Outlook</h3>
+          <div class="summary-card"><p>${overallSummary}</p></div>
+
+          <h3>7-Day Forecast</h3>
+          <table>
+            <tr><th>Day</th><th>Condition</th><th>Temp</th><th>Rain Chance</th></tr>
+            ${dailyRows}
+          </table>
+
+          <h3>Crop Risk Insights</h3>
+          ${riskBlocks}
+
+          <p class="footer">Generated by Crop Guardian. Risk levels are estimates based on weather conditions, not guarantees.</p>
+        </body>
+      </html>`;
+  };
 
   const saveAsPDF = async () => {
     if (!weatherData) return;
-    // NEW ADDITION: disable the export button for the duration of the export
+
     setExportingPdf(true);
-    // ... (PDF logic remains the same)
-    const html = `...`; // (same as previous)
+
     try {
+      const html = buildReportHtml(); // UPDATED: real HTML built from actual data, was a placeholder string before
+
       const { uri } = await Print.printToFileAsync({ html });
+
+      // NEW ADDITION: check sharing is actually available on this device
+      // before calling shareAsync, some emulators/devices have no share
+      // sheet at all, which would otherwise fail silently.
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) {
+        Alert.alert(
+          "Sharing not available",
+          "Your device does not support sharing files, but the PDF was created successfully.",
+        );
+        return;
+      }
+
       await Sharing.shareAsync(uri, {
         UTI: "public.pdf",
         mimeType: "application/pdf",
       });
-      Alert.alert("Success", "Weather report saved as PDF");
     } catch (error) {
       // UPDATED: secure, generic error message, no internal error leaked to UI
+      console.error("PDF export error:", error);
       Alert.alert(
         "Export failed",
         "Could not generate the PDF. Please try again.",
@@ -293,6 +202,17 @@ export default function WeatherPage() {
     } finally {
       setExportingPdf(false);
     }
+  };
+
+  // Small trust-building touch: show how fresh the cached data is, so the
+  // person understands why a re-open of this screen felt instant, rather
+  // than wondering if the app is showing them something stale unknowingly.
+  const getFreshnessLabel = (): string | null => {
+    if (!fetchedAt) return null;
+    const minutesAgo = Math.floor((Date.now() - fetchedAt) / 60000);
+    if (minutesAgo < 1) return "Updated just now";
+    if (minutesAgo === 1) return "Updated 1 minute ago";
+    return `Updated ${minutesAgo} minutes ago`;
   };
 
   if (permissionDenied) {
@@ -338,7 +258,7 @@ export default function WeatherPage() {
           </Text>
           <TouchableOpacity
             style={[styles.grantButton, { backgroundColor: theme.primary }]}
-            onPress={fetchWeather}
+            onPress={() => fetchWeather({ force: true })}
             activeOpacity={0.85}
             disabled={isBusy}
           >
@@ -353,12 +273,29 @@ export default function WeatherPage() {
     );
   }
 
+  // UPDATED: plain centered ActivityIndicator, replacing the animated
+  // SkeletonLoader component entirely. Only shown on the very first load,
+  // when there is no cached data yet to display.
   if (loading && !weatherData) {
     return (
-      <SkeletonLoader
-        backgroundColor={theme.background}
-        surfaceColor={theme.surface}
-      />
+      <SafeAreaView
+        style={[styles.safeArea, { backgroundColor: theme.background }]}
+        edges={["top", "left", "right"]}
+      >
+        <View style={styles.headerContainer}>
+          <View style={styles.backButtonSkeleton} />
+          <Text style={[styles.headerTitle, { color: theme.primary }]}>
+            Weather
+          </Text>
+          <View style={styles.rightSpacer} />
+        </View>
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={[styles.loadingText, { color: theme.icon }]}>
+            Getting your local forecast...
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -391,7 +328,7 @@ export default function WeatherPage() {
 
         <TouchableOpacity
           style={[styles.backButton, { borderColor: theme.primary }]}
-          onPress={fetchWeather}
+          onPress={() => fetchWeather({ force: true })}
           activeOpacity={0.7}
           disabled={isBusy}
         >
@@ -414,7 +351,6 @@ export default function WeatherPage() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            // Disable pull to refresh while another async action is running
             enabled={!isBusy || refreshing}
             tintColor={theme.primary}
             colors={[theme.primary]}
@@ -423,6 +359,13 @@ export default function WeatherPage() {
       >
         {weatherData && (
           <>
+            {/* NEW ADDITION: freshness label, builds trust that cached data is intentional, not stale by accident */}
+            {getFreshnessLabel() && (
+              <Text style={[styles.freshnessLabel, { color: theme.icon }]}>
+                {getFreshnessLabel()}
+              </Text>
+            )}
+
             {/* ================= CURRENT WEATHER HERO ================= */}
             <View
               style={[
@@ -535,9 +478,6 @@ export default function WeatherPage() {
             </Text>
             <View style={styles.riskList}>
               {weatherData.riskInsights.map((insight) => {
-                // UPDATED: risk colors now resolved once per item, reused
-                // for both the badge background and the badge text so they
-                // always stay in sync.
                 const riskColor =
                   insight.riskLevel === "Low"
                     ? "#2E7D32"
@@ -662,7 +602,6 @@ const styles = StyleSheet.create({
     paddingBottom: verticalScale(100),
   },
 
-  // Header, matches Profile/MyCrops centered header pattern
   headerContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -692,7 +631,14 @@ const styles = StyleSheet.create({
   },
   rightSpacer: { width: moderateScale(32) },
 
-  // Current weather hero card
+  // NEW ADDITION: small "Updated X minutes ago" label above the hero card
+  freshnessLabel: {
+    fontSize: moderateScale(11),
+    fontWeight: "500",
+    marginBottom: verticalScale(8),
+    textAlign: "center",
+  },
+
   currentCard: {
     borderRadius: moderateScale(16),
     paddingVertical: verticalScale(24),
@@ -725,7 +671,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  // Section titles, matching Profile screen style exactly
   sectionTitle: {
     fontSize: moderateScale(15),
     fontWeight: "700",
@@ -733,7 +678,6 @@ const styles = StyleSheet.create({
     marginTop: verticalScale(4),
   },
 
-  // Today's outlook card
   summaryCard: {
     borderRadius: moderateScale(12),
     padding: scale(16),
@@ -750,9 +694,6 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
 
-  section: { marginBottom: verticalScale(20) },
-
-  // 7 day forecast
   dailyScroll: { marginBottom: verticalScale(20) },
   dailyCard: {
     width: scale(92),
@@ -777,7 +718,6 @@ const styles = StyleSheet.create({
   },
   precip: { fontSize: moderateScale(11), color: "#3b82f6", fontWeight: "600" },
 
-  // Crop risk insights
   riskList: { gap: verticalScale(12), marginBottom: verticalScale(20) },
   riskCard: {
     padding: scale(16),
@@ -815,7 +755,6 @@ const styles = StyleSheet.create({
   },
   factorChipText: { fontSize: moderateScale(10.5), fontWeight: "500" },
 
-  // PDF export button
   pdfButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -831,7 +770,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(14),
   },
 
-  // Permission denied state
   centerContainer: {
     flex: 1,
     justifyContent: "center",
@@ -865,7 +803,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: moderateScale(13),
   },
-
-  // Skeleton
-  skeletonBox: { backgroundColor: "#E5E7EB" },
+  // NEW ADDITION: label shown under the ActivityIndicator on first load
+  loadingText: {
+    fontSize: moderateScale(13),
+    marginTop: verticalScale(12),
+    fontWeight: "500",
+  },
 });

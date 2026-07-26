@@ -1,125 +1,87 @@
 // components/WeatherWidget.tsx
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import API from "@/services/api";
-import { getLocationName } from "@/utils/utilities";
+import { useWeatherStore } from "@/stores/weatherStore"; // NEW ADDITION: shared cache store
+import { getWeatherIcon } from "@/utils/utilities"; // UPDATED: reuse the single shared icon-map function instead of a local duplicate copy
 import { Ionicons } from "@expo/vector-icons";
-import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useRef } from "react";
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-// Map weather code → Ionicons name
-const getWeatherIcon = (code: number): string => {
-  if ([0, 1].includes(code)) return "sunny-outline";
-  if ([2, 3].includes(code)) return "partly-sunny-outline";
-  if ([45, 48].includes(code)) return "cloudy-outline";
-  if ([51, 53, 55].includes(code)) return "rainy-outline";
-  if ([61, 63, 65, 80, 81, 82].includes(code)) return "rainy-outline";
-  if ([71, 73, 75].includes(code)) return "snow-outline";
-  return "cloud-outline"; // fallback
-};
-
-//  Full backend shape (only fields that exist)
-interface BackendCurrent {
-  time: string;
-  interval: number;
-  temperature_2m: number;
-  relative_humidity_2m: number;
-  apparent_temperature: number;
-  precipitation: number;
-  weather_code: number;
-  weatherDescription: string;
-}
-
-interface WeatherData {
-  current: BackendCurrent;
-  overallSummary: string;
-  // daily, riskInsights, location are available but not used in this widget
-}
-
-//  Added weatherDescription field
-interface DisplayWeather {
-  temp: number;
-  humidity: number;
-  feelsLike: number;
-  description: string; //  weatherDescription from current
-  icon: string;
-  locationName: string;
-  overallSummary: string;
-}
-
 interface WeatherWidgetProps {
-  refreshTrigger?: number; 
+  // Incrementing this from the parent (e.g. on pull-to-refresh on Home)
+  // forces a real network refresh, bypassing the 15 minute cache.
+  refreshTrigger?: number;
 }
 
-export default function WeatherWidget({ refreshTrigger = 0 }: WeatherWidgetProps) {
+export default function WeatherWidget({
+  refreshTrigger = 0,
+}: WeatherWidgetProps) {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
 
-  const [weatherData, setWeatherData] = useState<DisplayWeather | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [permissionDenied, setPermissionDenied] = useState(false);
+  // Pulling individual slices (not the whole store object) so this component
+  // only re-renders when one of these specific values actually changes.
+  const weatherData = useWeatherStore((state) => state.weatherData);
+  const locationName = useWeatherStore((state) => state.locationName);
+  const loading = useWeatherStore((state) => state.loading);
+  const permissionDenied = useWeatherStore((state) => state.permissionDenied);
+  const fetchWeather = useWeatherStore((state) => state.fetchWeather);
 
-    useEffect(() => {
-    fetchWeather();
-  }, [refreshTrigger]);
+  // useRef<number> tracks the previous refreshTrigger value across renders
+  // without causing a re-render itself, purely used to detect "did this prop
+  // actually change" versus "component just re-rendered for another reason".
+  const previousTrigger = useRef<number>(refreshTrigger);
 
-  const fetchWeather = async () => {
-    try {
-      setLoading(true);
-      setPermissionDenied(false);
-
-      const { status } = await Location.requestForegroundPermissionsAsync();
-
-      if (status !== "granted") {
-        setPermissionDenied(true);
-        setLoading(false);
-        return;
-      }
-
-      const loc = await Location.getCurrentPositionAsync({});
-      const locationName = await getLocationName(
-        loc.coords.latitude,
-        loc.coords.longitude,
-      );
-
-      const params = {
-        lat: loc.coords.latitude,
-        lon: loc.coords.longitude,
-      };
-
-      const res = await API.get("/api/weather/forecast", { params });
-
-      if (res.data?.success && res.data.data?.current) {
-        const current = res.data.data.current;
-        const displayData: DisplayWeather = {
-          temp: current.temperature_2m,
-          humidity: current.relative_humidity_2m,
-          feelsLike: current.apparent_temperature,
-          description: current.weatherDescription, //  weather code summary
-          icon: getWeatherIcon(current.weather_code),
-          locationName,
-          overallSummary: res.data.data.overallSummary,
-        };
-        setWeatherData(displayData);
-      }
-    } catch (err) {
-      console.error("WeatherWidget: Error fetching weather:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Mount effect: ask the store for data. If a cached result younger than
+  // 15 minutes already exists (e.g. the Weather screen fetched it moments
+  // ago), fetchWeather() resolves instantly and does not hit the network.
   useEffect(() => {
     fetchWeather();
-  }, []);
+  }, [fetchWeather]);
+
+  // Separate effect specifically for the parent-driven force refresh
+  // (pull-to-refresh on the Home screen). Only fires when refreshTrigger
+  // actually increments, not on first mount.
+  useEffect(() => {
+    if (refreshTrigger !== previousTrigger.current) {
+      previousTrigger.current = refreshTrigger;
+      fetchWeather({ force: true });
+    }
+  }, [refreshTrigger, fetchWeather]);
 
   const handleGrantPermission = () => {
-    fetchWeather();
+    fetchWeather({ force: true });
   };
+
+  // Loading state, ONLY shown when there is no data at all yet (first ever
+  // load). Once cached data exists, we keep showing it even during a
+  // background refresh, so the widget never blanks out on pull-to-refresh.
+  if (loading && !weatherData) {
+    return (
+      <View
+        style={[
+          styles.weatherWidget,
+          {
+            backgroundColor: colorScheme === "light" ? "#EBF7E9" : "#1E2C20",
+            justifyContent: "center",
+            minHeight: verticalScale(130),
+          },
+        ]}
+      >
+        {/* UPDATED: plain ActivityIndicator instead of an animated skeleton, simpler and cheaper to render */}
+        <ActivityIndicator size="small" color={theme.primary} />
+      </View>
+    );
+  }
 
   if (permissionDenied) {
     return (
@@ -155,14 +117,22 @@ export default function WeatherWidget({ refreshTrigger = 0 }: WeatherWidgetProps
             },
           ]}
           onPress={handleGrantPermission}
+          disabled={loading} // NEW ADDITION: disable while a request is in flight
+          activeOpacity={0.8}
         >
-          <Text style={[styles.forecastButtonText, { color: theme.primary }]}>
-            Grant Location Access
-          </Text>
+          {loading ? (
+            <ActivityIndicator size="small" color={theme.primary} />
+          ) : (
+            <Text style={[styles.forecastButtonText, { color: theme.primary }]}>
+              Grant Location Access
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
     );
   }
+
+  const current = weatherData?.current;
 
   return (
     <View
@@ -173,37 +143,37 @@ export default function WeatherWidget({ refreshTrigger = 0 }: WeatherWidgetProps
         },
       ]}
     >
-      {/* LEFT SIDE — location, temperature, description, forecast button */}
+      {/* LEFT SIDE, location, temperature, description, forecast button */}
       <View style={styles.weatherLeft}>
         <Text style={[styles.weatherLocation, { color: theme.text }]}>
-          {weatherData?.locationName || "Detecting location..."}
+          {locationName}
         </Text>
 
         <View style={styles.tempRow}>
           <Ionicons
-            name={(weatherData?.icon as any) || "cloud-outline"}
+            name={
+              (current
+                ? getWeatherIcon(current.weather_code)
+                : "cloud-outline") as any
+            }
             size={moderateScale(38)}
             color={theme.primary}
             style={styles.weatherStateIcon}
           />
           <Text style={[styles.tempText, { color: theme.text }]}>
-            {weatherData?.temp !== undefined
-              ? `${Math.round(weatherData.temp)}°C`
-              : "--"}
+            {current ? `${Math.round(current.temperature_2m)}°C` : "--"}
           </Text>
         </View>
 
-        {/*  Weather code summary (short description from backend) */}
         <Text
           style={[
             styles.weatherDesc,
             { color: theme.text, fontWeight: "600", marginBottom: 4 },
           ]}
         >
-          {weatherData?.description || "—"}
+          {current?.weatherDescription || "Fetching..."}
         </Text>
 
-        {/*  overallSummary as secondary summary */}
         <Text
           style={[
             styles.weatherDesc,
@@ -222,6 +192,7 @@ export default function WeatherWidget({ refreshTrigger = 0 }: WeatherWidgetProps
           ]}
           activeOpacity={0.8}
           onPress={() => router.push("/weather")}
+          disabled={loading} // NEW ADDITION: disable while any refresh is running
         >
           <Text style={[styles.forecastButtonText, { color: theme.primary }]}>
             View full forecast
@@ -234,7 +205,6 @@ export default function WeatherWidget({ refreshTrigger = 0 }: WeatherWidgetProps
         </TouchableOpacity>
       </View>
 
-      {/* Vertical divider */}
       <View
         style={[
           styles.weatherDivider,
@@ -244,7 +214,7 @@ export default function WeatherWidget({ refreshTrigger = 0 }: WeatherWidgetProps
         ]}
       />
 
-      {/* RIGHT SIDE — Humidity, Feels like */}
+      {/* RIGHT SIDE, humidity, feels like */}
       <View style={styles.weatherRight}>
         <View style={styles.weatherStatItem}>
           <Ionicons
@@ -257,9 +227,7 @@ export default function WeatherWidget({ refreshTrigger = 0 }: WeatherWidgetProps
               Humidity
             </Text>
             <Text style={[styles.weatherStatValue, { color: theme.text }]}>
-              {weatherData?.humidity !== undefined
-                ? `${weatherData.humidity}%`
-                : "--"}
+              {current ? `${current.relative_humidity_2m}%` : "--"}
             </Text>
           </View>
         </View>
@@ -275,9 +243,7 @@ export default function WeatherWidget({ refreshTrigger = 0 }: WeatherWidgetProps
               Feels like
             </Text>
             <Text style={[styles.weatherStatValue, { color: theme.text }]}>
-              {weatherData?.feelsLike !== undefined
-                ? `${Math.round(weatherData.feelsLike)}°C`
-                : "--"}
+              {current ? `${Math.round(current.apparent_temperature)}°C` : "--"}
             </Text>
           </View>
         </View>
@@ -287,7 +253,6 @@ export default function WeatherWidget({ refreshTrigger = 0 }: WeatherWidgetProps
 }
 
 const styles = StyleSheet.create({
-  // to styles
   weatherWidget: {
     flexDirection: "row",
     borderRadius: moderateScale(16),

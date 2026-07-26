@@ -1,5 +1,6 @@
 // app/scan.tsx
 
+import AnimatedScreen from "@/components/AnimatedScreen";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import API from "@/services/api";
@@ -19,10 +20,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
 const { width } = Dimensions.get("window");
+
+const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
 
 type CropTypeEnum =
   | "MAIZE"
@@ -280,7 +284,7 @@ export default function ScanScreen() {
       style={[styles.safeArea, { backgroundColor: theme.background }]}
     >
       {/* Header  */}
-      <View style={styles.header}>
+      <AnimatedScreen delay={0} style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backButton}
@@ -296,10 +300,11 @@ export default function ScanScreen() {
           Scan Your Crop
         </Text>
         <View style={styles.rightSpacer} />
-      </View>
+      </AnimatedScreen>
 
       {/* Image Container with Overlay */}
-      <View
+      <AnimatedScreen
+        delay={80}
         style={[
           styles.imageContainer,
           !imageUri && styles.placeholderImageContainer,
@@ -345,7 +350,7 @@ export default function ScanScreen() {
             {renderCropGrid()}
           </BlurView>
         )}
-      </View>
+      </AnimatedScreen>
 
       {/* Instruction Text  */}
       <Text style={[styles.instructionText, { color: theme.text }]}>
@@ -357,7 +362,7 @@ export default function ScanScreen() {
       </Text>
 
       {/* Bottom Controls  */}
-      <View style={styles.bottomControls}>
+      <AnimatedScreen delay={160} style={styles.bottomControls}>
         <TouchableOpacity
           style={styles.iconButton}
           onPress={uploadImage}
@@ -427,7 +432,7 @@ export default function ScanScreen() {
             contentFit="contain"
           />
         </TouchableOpacity>
-      </View>
+      </AnimatedScreen>
     </SafeAreaView>
   );
 }

@@ -1,4 +1,5 @@
 // app/(tabs)/index.tsx
+import AnimatedScreen from "@/components/AnimatedScreen";
 import WeatherWidget from "@/components/WeatherWidget";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -124,7 +125,7 @@ export default function HomeScreen() {
       >
         {/* ================= HEADER SECTION ================= */}
 
-        <View style={styles.headerContainer}>
+        <AnimatedScreen delay={0} style={styles.headerContainer}>
           <View style={styles.headerLeft}>
             <View style={styles.greetingRow}>
               <Text style={[styles.greetingText, { color: theme.text }]}>
@@ -163,14 +164,16 @@ export default function HomeScreen() {
               </View>
             )}
           </TouchableOpacity>
-        </View>
+        </AnimatedScreen>
 
         {/* ================= WEATHER SECTION ================= */}
 
-        <WeatherWidget refreshTrigger={weatherRefreshTrigger} />
+        <AnimatedScreen delay={40}>
+          <WeatherWidget refreshTrigger={weatherRefreshTrigger} />
+        </AnimatedScreen>
 
         {/* ================= DISEASE SCAN BANNER ================= */}
-        <View style={styles.scanBanner}>
+        <AnimatedScreen delay={80} style={styles.scanBanner}>
           <Image
             source={require("@/assets/images/leafimage.png")}
             style={styles.scanBannerBg}
@@ -224,7 +227,7 @@ export default function HomeScreen() {
               resizeMode="contain"
             />
           </View>
-        </View>
+        </AnimatedScreen>
 
         {/* ================= FARM HEALTH OVERVIEW ================= */}
 

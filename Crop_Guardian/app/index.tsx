@@ -2,10 +2,11 @@
 
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator } from "react-native";
 
 import { useAuthStore } from "@/stores/authStore";
 import { useOnboardingStore } from "@/stores/onboardingStore";
+import Animated, { FadeIn } from "react-native-reanimated";
 
 export default function IndexScreen() {
   const router = useRouter();
@@ -36,8 +37,11 @@ export default function IndexScreen() {
   }, [hasOnboarded, onboardingHydrated, isAuthenticated, authHydrated]);
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+    <Animated.View
+      entering={FadeIn.duration(250)}
+      style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+    >
       <ActivityIndicator size="large" />
-    </View>
+    </Animated.View>
   );
 }

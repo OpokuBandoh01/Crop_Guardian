@@ -16,32 +16,22 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-// NO CHANGES: BlurView for modal backdrop blur
 import { BlurView } from "expo-blur";
 
 import API, { EXPO_PUBLIC_GHANANLP_API_KEY } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 import axios from "axios";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-// NEW ADDITION: on-device text-to-speech for English. Unlike the GhanaNLP
-// path used for Twi, this speaks directly through the phone's own TTS
-// engine: no network call, no API quota, and no practical length limit
-// worth truncating for.
+
+import AnimatedScreen from "@/components/AnimatedScreen";
 import * as Speech from "expo-speech";
 
-// NO CHANGES: describes the shape of the suggestAddToMyCrops object
-// so TypeScript can validate every access to its properties.
 interface SuggestCrop {
   suggested: boolean;
   cropType: string;
   message: string;
 }
 
-// NEW ADDITION: a union type (a value that can only be one of these two exact
-// strings) representing which section's audio we are dealing with. Using a
-// union type here means TypeScript will error out if we ever misspell
-// "description" or "actions" anywhere in the file, instead of silently
-// letting a typo through the way a plain `string` would.
 type TtsSection = "description" | "actions";
 
 export default function ResultScreen() {
@@ -860,7 +850,7 @@ export default function ResultScreen() {
         scrollEnabled={!showSuggestModal}
       >
         {/* Header */}
-        <View style={styles.header}>
+        <AnimatedScreen delay={0} style={styles.header}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.iconButton}
@@ -894,12 +884,15 @@ export default function ResultScreen() {
               />
             </TouchableOpacity>
           </View>
-        </View>
+        </AnimatedScreen>
 
         <Text style={styles.mainTitle}>Result</Text>
 
         {/* Disease Info Card (NO CHANGES) */}
-        <View style={[styles.card, { backgroundColor: cardColor }]}>
+        <AnimatedScreen
+          delay={80}
+          style={[styles.card, { backgroundColor: cardColor }]}
+        >
           {scanResult?.imageUrl ? (
             <Image
               source={{ uri: scanResult.imageUrl }}
@@ -934,10 +927,11 @@ export default function ResultScreen() {
               </Text>
             </View>
           </View>
-        </View>
+        </AnimatedScreen>
 
         {/* Description Card with TTS */}
-        <View
+        <AnimatedScreen
+          delay={160}
           style={[
             styles.card,
             { backgroundColor: cardColor, flexDirection: "column" },
@@ -1012,10 +1006,11 @@ export default function ResultScreen() {
               <Text style={styles.ttsErrorText}>{descriptionTtsError}</Text>
             </TouchableOpacity>
           )}
-        </View>
+        </AnimatedScreen>
 
         {/* Recommended Actions */}
-        <View
+        <AnimatedScreen
+          delay={240}
           style={[
             styles.card,
             {
@@ -1101,7 +1096,7 @@ export default function ResultScreen() {
               <Text style={styles.ttsErrorText}>{actionsTtsError}</Text>
             </TouchableOpacity>
           )}
-        </View>
+        </AnimatedScreen>
       </ScrollView>
     </SafeAreaView>
   );

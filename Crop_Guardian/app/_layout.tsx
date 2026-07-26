@@ -35,28 +35,22 @@ export default function RootLayout() {
   const responseListenerRef = useRef<Notifications.Subscription | null>(null);
 
   useEffect(() => {
-    // fires while the app is open and a push notification arrives.
-    // We use it to refresh the in-app notification list/unread badge instantly,
-    // this is the "real-time while the app is open" behavior on top of the OS push.
     receivedListenerRef.current = Notifications.addNotificationReceivedListener(
       () => {
         fetchNotifications();
       },
     );
 
-    // fires when the user taps a notification, whether the app
-    // was open, backgrounded, or fully killed at the time.
     responseListenerRef.current =
       Notifications.addNotificationResponseReceivedListener((response) => {
         const actionLink = response.notification.request.content.data
           ?.actionLink as string | undefined;
 
         if (actionLink) {
-          router.push(actionLink as any); // 'as any': actionLink is a dynamic string from the backend, not a route expo-router's types know about ahead of time
+          router.push(actionLink as any);
         }
       });
 
-    // cleanup, removes both listeners on unmount so they don't stack up
     return () => {
       receivedListenerRef.current?.remove();
       responseListenerRef.current?.remove();
@@ -66,7 +60,12 @@ export default function RootLayout() {
   return (
     <KeyboardProvider>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <Stack>
+        <Stack
+          screenOptions={{
+            animation: "slide_from_right",
+            animationDuration: 220,
+          }}
+        >
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />

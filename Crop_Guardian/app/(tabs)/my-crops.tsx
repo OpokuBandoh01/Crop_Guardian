@@ -20,6 +20,7 @@ import API from "@/services/api";
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "react-native";
+import { FadeInDown } from "react-native-reanimated";
 import AddCropModal from "../../components/crops/components/AddCropModal";
 import CropCard from "../../components/crops/components/CropCard";
 import CropDetailSheet from "../../components/crops/components/CropDetailSheet";
@@ -380,7 +381,10 @@ export default function MyCropsScreen() {
 
   // Empty state
   const renderEmpty = () => (
-    <View style={styles.emptyContainer}>
+    <Animated.View
+      entering={FadeInDown.duration(320)}
+      style={styles.emptyContainer}
+    >
       <Text style={styles.emptyEmoji}>🌱</Text>
       <Text style={styles.emptyTitle}>No crops tracked yet</Text>
       <Text style={styles.emptySubtitle}>
@@ -393,7 +397,7 @@ export default function MyCropsScreen() {
         <Ionicons name="add" size={18} color="#FFFFE7" />
         <Text style={styles.emptyAddText}>Add Your First Crop</Text>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 
   return (
@@ -402,7 +406,10 @@ export default function MyCropsScreen() {
       edges={["top"]}
     >
       {/* Animated sticky header */}
-      <Animated.View style={[styles.stickyHeader, { height: headerHeight }]}>
+      <Animated.View
+        style={[styles.stickyHeader, { height: headerHeight }]}
+        entering={FadeInDown.duration(300)}
+      >
         <Animated.View style={{ opacity: greetingOpacity }}>
           <Text style={styles.headerGreeting}>Your Farm</Text>
           <Text style={styles.headerSub}>
@@ -444,13 +451,23 @@ export default function MyCropsScreen() {
         <Animated.FlatList
           data={crops}
           keyExtractor={(item) => item.cropType}
-          renderItem={({ item }) => (
-            <CropCard
-              item={item}
-              onPress={openDetailSheet}
-              onEdit={openEditModal}
-              onDelete={openDeleteModal}
-            />
+          renderItem={({ item, index }) => (
+            // Math.min(index * 60, 300) caps the stagger delay so a long
+            // list doesn't take forever for the last card to appear, the
+            // first five cards stagger, everything after that just fades
+            // in together at the 300ms mark.
+            <Animated.View
+              entering={FadeInDown.duration(280).delay(
+                Math.min(index * 60, 300),
+              )}
+            >
+              <CropCard
+                item={item}
+                onPress={openDetailSheet}
+                onEdit={openEditModal}
+                onDelete={openDeleteModal}
+              />
+            </Animated.View>
           )}
           ListEmptyComponent={renderEmpty}
           contentContainerStyle={[

@@ -1,10 +1,12 @@
 // app/(tabs)/index.tsx
 import AnimatedScreen from "@/components/AnimatedScreen";
 import WeatherWidget from "@/components/WeatherWidget";
+import DailyTipCard from "@/components/daily-tips/DailyTipCard"; // NEW ADDITION: reusable daily tip card, replaces the old hardcoded card
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import API from "@/services/api";
 import { useNotificationStore } from "@/stores/notificationStore";
+import { useTipStore } from "@/stores/tipStore"; // NEW ADDITION
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useRouter } from "expo-router";
@@ -25,6 +27,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { unreadCount, fetchNotifications } = useNotificationStore();
+  const fetchTodayTips = useTipStore((state) => state.fetchTodayTips); // NEW ADDITION
 
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
@@ -38,7 +41,14 @@ export default function HomeScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     setWeatherRefreshTrigger((prev) => prev + 1);
-    await Promise.all([fetchUser(), fetchMyCrops(), fetchNotifications()]);
+    // UPDATED: added fetchTodayTips() so pulling to refresh on the home
+    // screen also refreshes the daily tips card, matching the other cards.
+    await Promise.all([
+      fetchUser(),
+      fetchMyCrops(),
+      fetchNotifications(),
+      fetchTodayTips(),
+    ]);
     setRefreshing(false);
   };
 
@@ -96,6 +106,10 @@ export default function HomeScreen() {
     fetchUser();
     fetchMyCrops();
     fetchNotifications();
+    // NEW ADDITION: DailyTipCard also self-fetches on mount, but calling it
+    // here too means focus events (returning to this tab) keep tips fresh
+    // in step with the rest of the home screen's data.
+    fetchTodayTips();
 
     const unsubscribe = navigation.addListener("focus", () => {
       fetchUser();
@@ -104,6 +118,7 @@ export default function HomeScreen() {
     });
 
     return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigation, fetchNotifications]);
 
   return (
@@ -149,7 +164,7 @@ export default function HomeScreen() {
             style={styles.notificationButton}
             onPress={() => router.push("/alerts")}
             activeOpacity={0.7}
-            disabled={false} // will respect loading from store if extended later
+            disabled={false}
           >
             <Ionicons
               name="notifications-outline"
@@ -458,6 +473,8 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
 
+          {/* UPDATED: "Tips" quick action now navigates to the full daily
+              tips screen instead of doing nothing */}
           <TouchableOpacity
             style={[
               styles.quickActionBtn,
@@ -467,6 +484,7 @@ export default function HomeScreen() {
               },
             ]}
             activeOpacity={0.8}
+            onPress={() => router.push("/daily-tips")}
           >
             <Image
               source={require("@/assets/icons/tipsicon.png")}
@@ -508,33 +526,10 @@ export default function HomeScreen() {
           style={styles.horizontalScrollView}
           contentContainerStyle={styles.horizontalScrollContent}
         >
-          {/* Card 1: Daily Tip */}
-          <View style={[styles.bottomCard, styles.dailyTipCard]}>
-            <View style={styles.dailyTipLeft}>
-              <View style={styles.cardHeaderRow}>
-                <Ionicons
-                  name="bulb-outline"
-                  size={moderateScale(16)}
-                  color="#094A04"
-                  style={styles.cardHeaderIcon}
-                />
-                <Text style={styles.dailyTipHeaderTitle}>Daily Tip</Text>
-              </View>
-              <Text style={styles.dailyTipBody}>
-                Water your maize in the evening for better absorbtion
-              </Text>
-            </View>
-
-            <View style={styles.blendBorder} />
-
-            <View style={styles.dailyTipRight}>
-              <Image
-                source={require("@/assets/images/dailytipimage.png")}
-                style={styles.dailyTipImage}
-                resizeMode="cover"
-              />
-            </View>
-          </View>
+          {/* UPDATED: Card 1 was a hardcoded "Daily Tip" mock. Replaced with
+              the fully wired, reusable DailyTipCard which fetches its own
+              data from the tips API and handles loading/error/empty states. */}
+          <DailyTipCard />
 
           {/* Card 2: Recent Scan */}
           <View
@@ -884,49 +879,10 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
 
-  // Card 1: Daily Tip
-  dailyTipCard: {
-    width: scale(280),
-    backgroundColor: "#FFFFFF",
-    flexDirection: "row",
-    overflow: "hidden",
-  },
-  dailyTipLeft: {
-    flex: 1.4,
-    padding: scale(12),
-    justifyContent: "center",
-  },
-  cardHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: verticalScale(6),
-  },
-  cardHeaderIcon: {
-    marginRight: scale(6),
-  },
-  dailyTipHeaderTitle: {
-    fontSize: moderateScale(13),
-    fontWeight: "700",
-    color: "#11181C",
-  },
-  dailyTipBody: {
-    fontSize: moderateScale(11.5),
-    color: "#4B5563",
-    lineHeight: verticalScale(16),
-  },
-  blendBorder: {
-    width: 2,
-    height: "100%",
-    backgroundColor: "#D9D9D9",
-  },
-  dailyTipRight: {
-    flex: 1,
-    height: "100%",
-  },
-  dailyTipImage: {
-    width: "100%",
-    height: "100%",
-  },
+  // NOTE: dailyTipCard / dailyTipLeft / cardHeaderRow / cardHeaderIcon /
+  // dailyTipHeaderTitle / dailyTipBody / blendBorder / dailyTipRight /
+  // dailyTipImage styles were removed from this file since that card's
+  // markup now lives entirely inside components/daily-tips/DailyTipCard.tsx.
 
   // Card 2: Recent Scan
   recentScanCard: {

@@ -9,6 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect } from "react";
 import {
+  Alert,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -24,7 +25,7 @@ export default function AlertsScreen() {
   const theme = Colors[colorScheme];
   const router = useRouter();
 
-  //  Connect to notification store
+  // NO CHANGES: Connect to notification store, plus the new clearAllNotifications action
   const {
     notifications,
     loading,
@@ -32,16 +33,35 @@ export default function AlertsScreen() {
     fetchNotifications,
     markAsRead,
     markAllAsRead,
+    clearAllNotifications,
   } = useNotificationStore();
 
   const onRefresh = useCallback(() => {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  //  Load notifications when screen mounts/focuses
+  // NO CHANGES: Load notifications when screen mounts/focuses
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  // NEW ADDITION: Clearing alerts is destructive and cannot be undone from the UI,
+  // so confirm first. This is a small persuasive-UX safety net, it protects the
+  // farmer from accidentally losing alerts they may still want to act on.
+  const handleClearAll = useCallback(() => {
+    Alert.alert(
+      "Clear all alerts?",
+      "This will permanently remove all your alerts. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear all",
+          style: "destructive",
+          onPress: () => clearAllNotifications(),
+        },
+      ],
+    );
+  }, [clearAllNotifications]);
 
   const renderNotification = ({ item }: { item: Notification }) => {
     const isHighPriority = item.priority === "HIGH";
@@ -84,11 +104,9 @@ export default function AlertsScreen() {
           {item.message}
         </Text>
 
-        {item.actionLink && (
-          <Text style={[styles.actionLink, { color: theme.primary }]}>
-            Take action →
-          </Text>
-        )}
+        {/* UPDATED: "Take action ->" text removed per request. The card itself
+            still marks the alert read and follows item.actionLink on tap,
+            only the visible link text was taken out. */}
       </TouchableOpacity>
     );
   };
@@ -102,17 +120,42 @@ export default function AlertsScreen() {
           Alerts
         </Text>
 
-        {/*  Mark all as read button */}
+        {/* UPDATED: wrapped both header actions in a row so "Mark all read"
+            and the new "Clear all" button sit side by side */}
         {notifications.length > 0 && (
-          <TouchableOpacity
-            onPress={markAllAsRead}
-            disabled={loading}
-            style={styles.markAllButton}
-          >
-            <Text style={{ color: theme.primary, fontWeight: "600" }}>
-              Mark all read
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              onPress={markAllAsRead}
+              disabled={loading}
+              style={styles.markAllButton}
+            >
+              <Text
+                style={{
+                  color: loading ? theme.icon : theme.primary,
+                  fontWeight: "600",
+                }}
+              >
+                Mark all read
+              </Text>
+            </TouchableOpacity>
+
+            {/* NEW ADDITION: Clear all button, disabled during any loading state
+                so the user can't fire overlapping requests */}
+            <TouchableOpacity
+              onPress={handleClearAll}
+              disabled={loading}
+              style={styles.clearAllButton}
+            >
+              <Text
+                style={{
+                  color: loading ? theme.icon : "#EF4444",
+                  fontWeight: "600",
+                }}
+              >
+                Clear all
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -164,8 +207,18 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(24),
     fontWeight: "700",
   },
+  // NEW ADDITION: groups the two header buttons so they sit next to each other
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   markAllButton: {
     padding: moderateScale(8),
+  },
+  // NEW ADDITION: small left margin so "Clear all" doesn't sit flush against "Mark all read"
+  clearAllButton: {
+    padding: moderateScale(8),
+    marginLeft: moderateScale(4),
   },
   listContent: {
     paddingHorizontal: moderateScale(16),
@@ -211,6 +264,8 @@ const styles = StyleSheet.create({
     lineHeight: moderateScale(20),
     marginBottom: moderateScale(8),
   },
+  // NOTE: actionLink style kept in case you want the link back later,
+  // it's just no longer referenced in renderNotification above.
   actionLink: {
     fontSize: moderateScale(13),
     fontWeight: "600",

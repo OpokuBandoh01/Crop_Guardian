@@ -15,6 +15,7 @@ interface User {
   location?: AppLocation;
   phoneNumber?: string;
   isEmailVerified?: boolean;
+  avatarUrl?: string | null;
 }
 
 interface AuthStore {

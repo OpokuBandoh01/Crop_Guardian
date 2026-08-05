@@ -1,13 +1,12 @@
-import API from "@/services/api";
-import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+// app/(tabs)/profile.tsx  -- adjust the path comment if yours differs
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { useNavigation, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,44 +16,27 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
+import { AvatarPicker } from "@/components/profile/AvatarPicker";
+import { StatsRow } from "@/components/profile/StatsRow";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { useAuthStore } from "@/stores/authStore";
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const navigation = useNavigation();
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [userData, setUserData] = useState<any>(null);
 
   const logoutUser = useAuthStore((state) => state.logout);
 
-  const fetchUserData = async () => {
-    try {
-      const cached = await AsyncStorage.getItem("userData");
-      if (cached) {
-        setUserData(JSON.parse(cached));
-      }
-      const res = await API.get("/api/auth/me");
-      if (res.data?.success && res.data.user) {
-        setUserData(res.data.user);
-        await AsyncStorage.setItem("userData", JSON.stringify(res.data.user));
-      }
-    } catch (err) {
-      console.warn("Error fetching me in profile:", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchUserData();
-    const unsubscribe = navigation.addListener("focus", () => {
-      fetchUserData();
-    });
-    return unsubscribe;
-  }, [navigation]);
+  // NEW ADDITION: one hook replaces the old manual AsyncStorage + API.get
+  // fetchUserData() function and its navigation "focus" listener. The hook
+  // itself refetches on mount, screens that want a manual refresh (like
+  // pull-to-refresh below) just call `refetch()`.
+  const { user, stats, loading, refreshing, refetch } = useUserProfile();
 
   const handlePress = (screen: string) => {
     if (screen === "Log Out") {
@@ -81,8 +63,6 @@ export default function ProfileScreen() {
       router.push("/about-us");
     } else if (screen === "Rate Us") {
       router.push("/rate-us");
-    } else {
-      console.log(`Navigating to ${screen}`);
     }
   };
 
@@ -93,14 +73,6 @@ export default function ProfileScreen() {
       ? "rgba(255, 255, 255, 0.65)"
       : "rgba(0, 0, 0, 0.75)";
 
-  // NEW ADDITION: maps the raw language code stored on the user object ("en" / "tw")
-  // to a human-readable label for the Preferences pill badge below. Falls back to
-  // "English" if the user's language hasn't loaded yet or is unset, since "en" is
-  // the backend's default language for new accounts.
-  // TypeScript note: `code?: string` means this parameter is optional (the `?`),
-  // so we can safely call getLanguageLabel(userData?.language) even before
-  // userData has loaded, without TypeScript complaining about a possible
-  // undefined value being passed in.
   const getLanguageLabel = (code?: string): string => {
     if (code === "tw") return "Twi";
     return "English";
@@ -127,9 +99,10 @@ export default function ProfileScreen() {
         style={styles.rowContainer}
         onPress={onPress}
         activeOpacity={0.7}
-        disabled={!onPress}
+        // NEW ADDITION: every row is disabled while a logout is in flight,
+        // per the "disable all clickables while loading" rule.
+        disabled={!onPress || isLoggingOut}
       >
-        {/* Left Icon */}
         {iconConfig ? (
           <View style={styles.rowIconContainer}>
             {iconConfig.type === "ionicons" && (
@@ -146,20 +119,11 @@ export default function ProfileScreen() {
                 color={iconColor}
               />
             )}
-            {iconConfig.type === "material" && (
-              <MaterialCommunityIcons
-                name={iconConfig.name as any}
-                size={moderateScale(19)}
-                color={iconColor}
-              />
-            )}
           </View>
         ) : (
-          // Align text if no icon is specified
           <View style={{ width: moderateScale(26) }} />
         )}
 
-        {/* Text Details */}
         <View style={styles.rowTextContainer}>
           <Text style={[styles.rowTitle, { color: titleColor }]}>{title}</Text>
           <Text style={[styles.rowSubtitle, { color: subtitleColor }]}>
@@ -167,7 +131,6 @@ export default function ProfileScreen() {
           </Text>
         </View>
 
-        {/* Right Action Element */}
         {rightElement ? (
           <View style={styles.rowRightContainer}>{rightElement}</View>
         ) : (
@@ -185,22 +148,18 @@ export default function ProfileScreen() {
 
   const handleConfirmLogout = async () => {
     setIsLoggingOut(true);
-
     await new Promise((resolve) => setTimeout(resolve, 500));
-
     logoutUser();
-
     setIsLoggingOut(false);
     setLogoutModalVisible(false);
-
     router.replace("/(auth)/login");
   };
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}
       edges={["top", "left", "right"]}
     >
-      {/* ================= HEADER SECTION ================= */}
       <View style={styles.headerContainer}>
         <Text style={[styles.headerTitle, { color: theme.primary }]}>
           Profile
@@ -210,38 +169,31 @@ export default function ProfileScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={refetch}
+            tintColor={theme.primary}
+          />
+        }
       >
-        {/* ================= PROFILE CARD ================= */}
         <View style={styles.profileCard}>
-          {/* Card Top Section */}
           <View style={styles.profileTopSection}>
-            {/* Circular Avatar with Camera overlay badge */}
-            <TouchableOpacity
-              style={styles.avatarWrapper}
-              onPress={() => handlePress("Change Avatar")}
-              activeOpacity={0.9}
-            >
-              <Image
-                source={require("@/assets/images/thefarmer.png")}
-                style={styles.avatar}
-                resizeMode="cover"
+            {/* UPDATED: was a plain Image + hardcoded onPress console.log,
+                now a fully working upload flow via AvatarPicker. */}
+            <View style={{ marginRight: scale(12) }}>
+              <AvatarPicker
+                avatarUrl={user?.profile?.avatarUrl}
+                onUploaded={() => refetch()}
+                disabled={loading || isLoggingOut}
               />
-              <View style={styles.avatarBadge}>
-                <Feather
-                  name="camera"
-                  size={moderateScale(10)}
-                  color="#094A04"
-                />
-              </View>
-            </TouchableOpacity>
+            </View>
 
-            {/* Farmer Info */}
             <View style={styles.farmerInfo}>
               <Text style={styles.farmerName}>
-                {userData?.profile?.fullName || "Farmer Name"}
+                {user?.profile?.fullName || "Farmer Name"}
               </Text>
 
-              {/* Crop Badge */}
               <View style={styles.cropBadge}>
                 <Ionicons
                   name="leaf"
@@ -249,14 +201,13 @@ export default function ProfileScreen() {
                   color="#A3C89E"
                 />
                 <Text style={styles.cropBadgeText}>
-                  {userData?.profile?.preferredCrops &&
-                  userData.profile.preferredCrops.length > 0
-                    ? `${userData.profile.preferredCrops[0].charAt(0).toUpperCase() + userData.profile.preferredCrops[0].slice(1).toLowerCase()} farmer`
+                  {user?.profile?.preferredCrops &&
+                  user.profile.preferredCrops.length > 0
+                    ? `${user.profile.preferredCrops[0].charAt(0).toUpperCase()}${user.profile.preferredCrops[0].slice(1).toLowerCase()} farmer`
                     : "Farmer"}
                 </Text>
               </View>
 
-              {/* Location */}
               <View style={styles.locationRow}>
                 <Ionicons
                   name="location-sharp"
@@ -264,16 +215,19 @@ export default function ProfileScreen() {
                   color="#A3C89E"
                 />
                 <Text style={styles.locationText}>
-                  {userData?.profile?.location?.address || "Kumasi, Ashanti"}
+                  {user?.profile?.location?.address || "Location not set"}
                 </Text>
               </View>
             </View>
 
-            {/* Edit Profile Button */}
             <TouchableOpacity
-              style={styles.editButton}
+              style={[
+                styles.editButton,
+                { opacity: loading || isLoggingOut ? 0.5 : 1 },
+              ]}
               onPress={() => handlePress("Edit Profile")}
               activeOpacity={0.8}
+              disabled={loading || isLoggingOut}
             >
               <Feather
                 name="edit-3"
@@ -285,76 +239,13 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Card Divider */}
           <View style={styles.cardDivider} />
 
-          {/* Stats Section */}
-          <View style={styles.statsContainer}>
-            {/* Stat Item: Crops */}
-            <View style={styles.statCol}>
-              <View style={styles.statHeaderRow}>
-                <MaterialCommunityIcons
-                  name="sprout-outline"
-                  size={moderateScale(16)}
-                  color="#A3C89E"
-                  style={styles.statIcon}
-                />
-                <Text style={styles.statLabel}>My Crops</Text>
-              </View>
-              <Text style={styles.statValue}>5</Text>
-            </View>
-
-            <View style={styles.statDivider} />
-
-            {/* Stat Item: Scans */}
-            <View style={styles.statCol}>
-              <View style={styles.statHeaderRow}>
-                <Ionicons
-                  name="scan-outline"
-                  size={moderateScale(16)}
-                  color="#A3C89E"
-                  style={styles.statIcon}
-                />
-                <Text style={styles.statLabel}>Scans</Text>
-              </View>
-              <Text style={styles.statValue}>12</Text>
-            </View>
-
-            <View style={styles.statDivider} />
-
-            {/* Stat Item: Alerts */}
-            <View style={styles.statCol}>
-              <View style={styles.statHeaderRow}>
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={moderateScale(16)}
-                  color="#A3C89E"
-                  style={styles.statIcon}
-                />
-                <Text style={styles.statLabel}>Alerts</Text>
-              </View>
-              <Text style={styles.statValue}>3</Text>
-            </View>
-
-            <View style={styles.statDivider} />
-
-            {/* Stat Item: Tips Saved */}
-            <View style={styles.statCol}>
-              <View style={styles.statHeaderRow}>
-                <Ionicons
-                  name="star-outline"
-                  size={moderateScale(16)}
-                  color="#A3C89E"
-                  style={styles.statIcon}
-                />
-                <Text style={styles.statLabel}>Tips Saved</Text>
-              </View>
-              <Text style={styles.statValue}>18</Text>
-            </View>
-          </View>
+          {/* UPDATED: was four hardcoded numbers, now the reusable
+              StatsRow bound to the real stats object from /me. */}
+          <StatsRow stats={stats} loading={loading} />
         </View>
 
-        {/* ================= ACCOUNT SECTION ================= */}
         <Text style={[styles.sectionTitle, { color: theme.primary }]}>
           Account
         </Text>
@@ -396,7 +287,6 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* ================= PREFERENCES SECTION ================= */}
         <Text style={[styles.sectionTitle, { color: theme.primary }]}>
           Preferences
         </Text>
@@ -430,12 +320,7 @@ export default function ProfileScreen() {
             { name: "globe-outline", type: "ionicons" },
             <View style={[styles.pillBadge, { backgroundColor: pillBg }]}>
               <Text style={[styles.pillBadgeText, { color: pillText }]}>
-                {getLanguageLabel(userData?.language)}
-                {/* UPDATED: was a hardcoded "English" string before. Now reflects the
-                    user's actual saved language from /api/auth/me, so it updates
-                    automatically after the user changes it on the Language screen
-                    and this Profile screen refetches on focus (see the
-                    navigation.addListener("focus", ...) effect above). */}
+                {getLanguageLabel(user?.language)}
               </Text>
               <Ionicons
                 name="chevron-forward"
@@ -475,7 +360,6 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* ================= SUPPORT & MORE SECTION ================= */}
         <Text style={[styles.sectionTitle, { color: theme.primary }]}>
           Support & More
         </Text>
@@ -518,26 +402,23 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
 
-      {/* ================= LOGOUT CONFIRMATION MODAL ================= */}
       <Modal
         animationType="fade"
         transparent={true}
         visible={logoutModalVisible}
         onRequestClose={() => {
-          if (!isLoggingOut) setLogoutModalVisible(false); // NO CHANGES: block dismiss while loading
+          if (!isLoggingOut) setLogoutModalVisible(false);
         }}
       >
         <View
           style={[styles.modalBackdrop, { backgroundColor: backdropBgColor }]}
         >
-          {/* Background Blur View sibling overlay */}
           <BlurView
             style={StyleSheet.absoluteFill}
             intensity={100}
             tint={colorScheme === "light" ? "light" : "dark"}
           />
 
-          {/* Modal Container Card */}
           <View style={[styles.modalCard, { backgroundColor: theme.surface }]}>
             <Text style={[styles.modalTitle, { color: theme.text }]}>
               Are you sure you want to logout?
@@ -610,24 +491,17 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   headerContainer: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: verticalScale(10),
   },
-  headerTitle: {
-    fontSize: moderateScale(18),
-    fontWeight: "700",
-  },
+  headerTitle: { fontSize: moderateScale(18), fontWeight: "700" },
   scrollContent: {
     paddingHorizontal: scale(16),
-    paddingBottom: verticalScale(100), // padding to clear floating navigation bar
+    paddingBottom: verticalScale(100),
   },
-
-  // Profile Card
   profileCard: {
     backgroundColor: "#094A04",
     borderRadius: moderateScale(16),
@@ -639,44 +513,8 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  profileTopSection: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  avatarWrapper: {
-    position: "relative",
-    marginRight: scale(12),
-  },
-  avatar: {
-    width: moderateScale(70),
-    height: moderateScale(70),
-    borderRadius: moderateScale(35),
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
-  },
-  avatarBadge: {
-    width: moderateScale(22),
-    height: moderateScale(22),
-    borderRadius: moderateScale(11),
-    backgroundColor: "#FFFFFF",
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    borderWidth: 1.5,
-    borderColor: "#094A04",
-    alignItems: "center",
-    justifyContent: "center",
-    // Soft drop shadow to make it pop out
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 3,
-  },
-  farmerInfo: {
-    flex: 1,
-    justifyContent: "center",
-  },
+  profileTopSection: { flexDirection: "row", alignItems: "center" },
+  farmerInfo: { flex: 1, justifyContent: "center" },
   farmerName: {
     fontSize: moderateScale(18),
     fontWeight: "700",
@@ -699,10 +537,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     marginLeft: scale(4),
   },
-  locationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  locationRow: { flexDirection: "row", alignItems: "center" },
   locationText: {
     fontSize: moderateScale(11),
     color: "#A3C89E",
@@ -717,9 +552,7 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(6),
     alignSelf: "center",
   },
-  editIcon: {
-    marginRight: scale(3),
-  },
+  editIcon: { marginRight: scale(3) },
   editButtonText: {
     fontSize: moderateScale(10),
     fontWeight: "700",
@@ -730,42 +563,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.15)",
     marginVertical: verticalScale(14),
   },
-
-  // Stats inside Profile Card
-  statsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  statCol: {
-    flex: 1,
-    alignItems: "center",
-  },
-  statHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: verticalScale(4),
-  },
-  statIcon: {
-    marginRight: scale(3),
-  },
-  statLabel: {
-    fontSize: moderateScale(9),
-    fontWeight: "600",
-    color: "#A3C89E",
-  },
-  statValue: {
-    fontSize: moderateScale(15),
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  statDivider: {
-    width: 1,
-    height: verticalScale(22),
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-  },
-
-  // Section styling
   sectionTitle: {
     fontSize: moderateScale(15),
     fontWeight: "700",
@@ -778,7 +575,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(9, 74, 4, 0.08)",
     marginBottom: verticalScale(20),
     overflow: "hidden",
-    // Premium soft shadow
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.02,
@@ -797,29 +593,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  rowTextContainer: {
-    flex: 1,
-  },
+  rowTextContainer: { flex: 1 },
   rowTitle: {
     fontSize: moderateScale(13),
     fontWeight: "700",
     marginBottom: verticalScale(2),
   },
-  rowSubtitle: {
-    fontSize: moderateScale(10.5),
-    fontWeight: "400",
-  },
-  rowRightContainer: {
-    justifyContent: "center",
-    alignItems: "flex-end",
-  },
+  rowSubtitle: { fontSize: moderateScale(10.5), fontWeight: "400" },
+  rowRightContainer: { justifyContent: "center", alignItems: "flex-end" },
   rowDivider: {
     height: 1,
     backgroundColor: "rgba(9, 74, 4, 0.06)",
     marginHorizontal: scale(14),
   },
-
-  // Pill badge inside Preference rows
   pillBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -832,8 +618,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginHorizontal: scale(4),
   },
-
-  // Modal styles
   modalBackdrop: {
     flex: 1,
     justifyContent: "center",
@@ -844,7 +628,6 @@ const styles = StyleSheet.create({
     width: "100%",
     borderRadius: moderateScale(14),
     paddingTop: verticalScale(20),
-    // Soft shadow for the dialog card
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.15,
@@ -867,10 +650,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(20),
     marginBottom: verticalScale(20),
   },
-  modalDivider: {
-    height: 1,
-    width: "100%",
-  },
+  modalDivider: { height: 1, width: "100%" },
   modalActionsRow: {
     flexDirection: "row",
     height: verticalScale(46),
@@ -882,14 +662,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  modalCancelButtonText: {
-    fontSize: moderateScale(14),
-    fontWeight: "600",
-  },
-  modalVerticalDivider: {
-    width: 1,
-    height: "100%",
-  },
+  modalCancelButtonText: { fontSize: moderateScale(14), fontWeight: "600" },
+  modalVerticalDivider: { width: 1, height: "100%" },
   modalConfirmButton: {
     flex: 1,
     height: "100%",
@@ -899,6 +673,6 @@ const styles = StyleSheet.create({
   modalConfirmButtonText: {
     fontSize: moderateScale(14),
     fontWeight: "700",
-    color: "#EF4444", // Red for logout
+    color: "#EF4444",
   },
 });

@@ -54,7 +54,8 @@ export const useAuthStore = create<AuthStore>()(
 
       // logout handler
       logout: () => {
-        unregisterPushToken();
+        const currentToken = get().token;
+        unregisterPushToken(currentToken ?? undefined);
         AsyncStorage.removeItem("userToken").catch(() => {});
         AsyncStorage.removeItem("userData").catch(() => {});
         useOnboardingStore.getState().resetOnboarding();

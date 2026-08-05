@@ -97,12 +97,19 @@ async function registerForPushNotificationsAsync() {
  * Call this during logout, so this device stops receiving alerts
  * for the account that just signed out.
  */
-export async function unregisterPushToken() {
+export async function unregisterPushToken(authToken?: string) {
   try {
     const token = await AsyncStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
     if (!token) return; // nothing to remove
 
-    await API.delete("/api/notifications/push-token", { data: { token } });
+    await API.delete("/api/notifications/push-token", {
+      data: { token },
+      skipAuthLogoutOn401: true,
+      ...(authToken
+        ? { headers: { Authorization: `Bearer ${authToken}` } }
+        : {}),
+    });
+
     await AsyncStorage.removeItem(PUSH_TOKEN_STORAGE_KEY);
   } catch (error) {
     // Best-effort only - a failed unregister should never block logout itself

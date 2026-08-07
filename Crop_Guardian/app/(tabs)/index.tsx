@@ -38,6 +38,21 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [weatherRefreshTrigger, setWeatherRefreshTrigger] = useState(0);
 
+  const getGreeting = (): string => {
+    const hour = new Date().getHours();
+
+    if (hour >= 5 && hour < 12) {
+      return "Good morning";
+    }
+    if (hour >= 12 && hour < 17) {
+      return "Good afternoon";
+    }
+    if (hour >= 17 && hour < 21) {
+      return "Good evening";
+    }
+    return "Good night";
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     setWeatherRefreshTrigger((prev) => prev + 1);
@@ -144,7 +159,7 @@ export default function HomeScreen() {
           <View style={styles.headerLeft}>
             <View style={styles.greetingRow}>
               <Text style={[styles.greetingText, { color: theme.text }]}>
-                Good morning,{" "}
+                {getGreeting()},{" "}
                 {userData?.profile?.fullName?.split(" ")[0] || "Farmer"}!
               </Text>
               <Image
@@ -153,6 +168,7 @@ export default function HomeScreen() {
                 resizeMode="contain"
               />
             </View>
+            ;
             <Text style={[styles.subtitleText, { color: theme.icon }]}>
               {"Let's make today a productive"}
               {"\n"}

@@ -22,6 +22,7 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useAuthStore } from "@/stores/authStore";
+import { useThemeStore } from "@/stores/themeStore";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -31,6 +32,8 @@ export default function ProfileScreen() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const logoutUser = useAuthStore((state) => state.logout);
+
+  const themePreference = useThemeStore((state) => state.themePreference);
 
   // NEW ADDITION: one hook replaces the old manual AsyncStorage + API.get
   // fetchUserData() function and its navigation "focus" listener. The hook
@@ -76,6 +79,12 @@ export default function ProfileScreen() {
   const getLanguageLabel = (code?: string): string => {
     if (code === "tw") return "Twi";
     return "English";
+  };
+
+  const getThemeLabel = (preference: string): string => {
+    if (preference === "dark") return "Dark";
+    if (preference === "system") return "System";
+    return "Light";
   };
 
   const renderRow = (
@@ -297,12 +306,18 @@ export default function ProfileScreen() {
             { name: "moon-outline", type: "ionicons" },
             <View style={[styles.pillBadge, { backgroundColor: pillBg }]}>
               <Ionicons
-                name="sunny-outline"
+                name={
+                  themePreference === "dark"
+                    ? "moon-outline"
+                    : themePreference === "system"
+                      ? "settings-outline"
+                      : "sunny-outline"
+                }
                 size={moderateScale(11)}
                 color={pillText}
               />
               <Text style={[styles.pillBadgeText, { color: pillText }]}>
-                Light
+                {getThemeLabel(themePreference)}
               </Text>
               <Ionicons
                 name="chevron-forward"

@@ -246,7 +246,7 @@ export default function HomeScreen() {
 
         {/* ================= FARM HEALTH OVERVIEW ================= */}
 
-        <View style={styles.sectionHeader}>
+        {/* <View style={styles.sectionHeader}>
           <View style={styles.sectionHeaderTitleWrapper}>
             <Image
               source={require("@/assets/icons/seedlingicon.png")}
@@ -414,7 +414,7 @@ export default function HomeScreen() {
               Tap to view
             </Text>
           </View>
-        </View>
+        </View> */}
 
         {/* ================= QUICK ACTIONS ================= */}
 
@@ -422,12 +422,12 @@ export default function HomeScreen() {
           <Text style={[styles.sectionTitle, { color: theme.text }]}>
             Quick Actions
           </Text>
-          <TouchableOpacity activeOpacity={0.7}>
+          {/* <TouchableOpacity activeOpacity={0.7}>
             <Text style={[styles.viewAllLink, { color: theme.icon }]}>
               See all{" "}
               <Ionicons name="chevron-forward" size={moderateScale(10)} />
             </Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         <View style={styles.quickActionsRow}>

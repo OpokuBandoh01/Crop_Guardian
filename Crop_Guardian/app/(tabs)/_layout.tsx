@@ -9,6 +9,7 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { useAuthStore } from "@/stores/authStore";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme() ?? "light";
@@ -85,6 +86,27 @@ export default function TabLayout() {
           tabBarLabel: ({ focused, color }) => (
             <View style={styles.labelWrapper}>
               <Text style={[styles.tabLabel, { color }]}>My Crops</Text>
+              {focused && <View style={styles.activeDot} />}
+            </View>
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: "Community",
+
+          tabBarIcon: ({ color }) => (
+            <Ionicons
+              name="people-outline"
+              size={moderateScale(22)}
+              color={color}
+            />
+          ),
+          tabBarLabel: ({ focused, color }) => (
+            <View style={styles.labelWrapper}>
+              <Text style={[styles.tabLabel, { color }]}>Community</Text>
               {focused && <View style={styles.activeDot} />}
             </View>
           ),

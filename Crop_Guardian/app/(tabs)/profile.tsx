@@ -161,7 +161,9 @@ export default function ProfileScreen() {
     logoutUser();
     setIsLoggingOut(false);
     setLogoutModalVisible(false);
-    router.replace("/(auth)/login");
+    setTimeout(() => {
+      router.replace("/(auth)/login");
+    }, 50);
   };
 
   return (

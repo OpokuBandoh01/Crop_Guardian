@@ -58,10 +58,6 @@ export default function LoginScreen() {
       const { token, user } = response.data;
       loginUser(token, user);
 
-      // NEW ADDITION: if this account was never phone-verified (e.g. they
-      // closed the app during signup before finishing OTP), send them back
-      // to verification instead of the main app. Resend the OTP first,
-      // since any code from signup time may already be expired.
       if (user?.isEmailVerified === false) {
         try {
           await forgotPassword(user.phoneNumber);
@@ -69,17 +65,21 @@ export default function LoginScreen() {
           console.warn("Could not resend verification code:", err);
         }
 
-        router.replace({
-          pathname: "/(auth)/verify-email",
-          params: {
-            phoneNumber: user.phoneNumber ?? "",
-            origin: "signup",
-          },
-        });
+        setTimeout(() => {
+          router.replace({
+            pathname: "/(auth)/verify-email",
+            params: {
+              phoneNumber: user.phoneNumber ?? "",
+              origin: "signup",
+            },
+          });
+        }, 50);
         return;
       }
 
-      router.replace("/(tabs)");
+      setTimeout(() => {
+        router.replace("/(tabs)");
+      }, 50);
     } catch (error: any) {
       console.error("Login error:", error);
       const errorMsg =

@@ -17,8 +17,14 @@ export default function TabLayout() {
 
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
+  const authHydrated = useAuthStore((state) => state.hasHydrated);
 
   usePushNotifications();
+
+  // Wait until store is hydrated before deciding
+  if (!authHydrated) {
+    return null; // or a small loading view
+  }
 
   if (!isAuthenticated) {
     return <Redirect href="/(auth)/login" />;
@@ -31,7 +37,7 @@ export default function TabLayout() {
           pathname: "/(auth)/verify-email",
           params: {
             phoneNumber: user.phoneNumber ?? "",
-            // "origin" tells verify-email.tsx this is a signup/login
+            // "origin" tells verify-email.stsx this is a signup/login
             // verification, not a password-reset OTP, so it knows to
             // send the user into (tabs) on success instead of reset-password.
             origin: "signup",

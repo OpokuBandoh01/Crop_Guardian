@@ -6,10 +6,12 @@
 
 import API from "@/services/api";
 import type {
-    CommunitySimpleResponse,
-    GetPostsParams,
-    GetPostsResponse,
-    GetTagsResponse,
+  CommunitySimpleResponse,
+  CreatePostPayload,
+  CreatePostResponse,
+  GetPostsParams,
+  GetPostsResponse,
+  GetTagsResponse,
 } from "@/types/community";
 
 // GET /api/community/tags
@@ -50,6 +52,57 @@ export async function unlikeCommunityPost(
 ): Promise<CommunitySimpleResponse> {
   const res = await API.delete<CommunitySimpleResponse>(
     `/api/community/posts/${postId}/like`,
+  );
+  return res.data;
+}
+
+export async function createCommunityPost(
+  payload: CreatePostPayload,
+): Promise<CreatePostResponse> {
+  // FormData is a built-in browser/RN type, no import needed.
+  const formData = new FormData();
+
+  formData.append("content", payload.content);
+
+  // IMPORTANT: tagIds must be a JSON-STRINGIFIED array inside the
+  // multipart field, not a normal repeated field. Every multipart field
+  // arrives at the backend as a plain string, so the backend explicitly
+  // JSON.parse()s this one field before validating it as an array of
+  // tag IDs. Appending each tag ID as its own "tagIds" field (the way
+  // you might with a normal HTML form) will NOT parse correctly there.
+  formData.append("tagIds", JSON.stringify(payload.tagIds));
+
+  if (payload.region) {
+    formData.append("region", payload.region);
+  }
+  if (payload.cropType) {
+    formData.append("cropType", payload.cropType);
+  }
+
+  (payload.images ?? []).forEach((uri, index) => {
+    // Same { uri, name, type } pattern used for avatar upload — React
+    // Native's FormData accepts this object in place of a real
+    // Blob/File, since a true File object does not exist on-device the
+    // way it does in a browser. The cast tells TypeScript to trust this
+    // shape, since it does not match the DOM's real Blob type.
+    formData.append("images", {
+      uri,
+      name: `post-image-${index}.jpg`,
+      type: "image/jpeg",
+    } as unknown as Blob);
+  });
+
+  const res = await API.post<CreatePostResponse>(
+    "/api/community/posts",
+    formData,
+    {
+      headers: {
+        // Forces axios/RN to generate the correct multipart boundary
+        // instead of falling back to the application/json default set
+        // on the shared API instance.
+        "Content-Type": "multipart/form-data",
+      },
+    },
   );
   return res.data;
 }

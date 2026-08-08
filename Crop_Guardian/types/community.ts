@@ -92,3 +92,18 @@ export interface CommunitySimpleResponse {
   success: boolean;
   message: string;
 }
+
+export interface CreatePostPayload {
+  content: string;
+  tagIds: string[];
+  region?: string;
+  cropType?: CropType;
+  images?: string[];
+}
+
+// POST /api/community/posts
+export interface CreatePostResponse {
+  success: boolean;
+  message: string;
+  data: CommunityPost;
+}

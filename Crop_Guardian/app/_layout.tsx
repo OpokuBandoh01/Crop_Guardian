@@ -95,7 +95,7 @@ export default function RootLayout() {
           <Stack.Screen name="about-us" options={{ headerShown: false }} />
           <Stack.Screen name="rate-us" options={{ headerShown: false }} />
           <Stack.Screen name="daily-tips" options={{ headerShown: false }} />
-          {/* <Stack.Screen name="logout" options={{ headerShown: false }} /> */}
+          <Stack.Screen name="create-post" options={{ headerShown: false }} />
           <Stack.Screen
             name="modal"
             options={{ presentation: "modal", title: "Modal" }}

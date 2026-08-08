@@ -14,18 +14,18 @@ import { useCommunityStore } from "@/stores/communityStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import type { CommunityPost } from "@/types/community";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useEffect } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
@@ -82,6 +82,25 @@ export default function CommunityScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // `useRef` (not `useState`) because this flag should NOT trigger a
+  // re-render when it changes, it's just a plain marker so the very
+  // first focus event (which fires right after the mount effect above
+  // already fetched everything) doesn't cause a redundant double fetch.
+  const hasFocusedOnce = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasFocusedOnce.current) {
+        hasFocusedOnce.current = true;
+        return;
+      }
+      // Picks up any post created on the Create Post screen since the
+      // user last left this tab.
+      refreshPosts();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
+
   const handleComingSoonTab = (tab: ComingSoonTab) => {
     Alert.alert(
       "Coming soon",
@@ -90,10 +109,7 @@ export default function CommunityScreen() {
   };
 
   const handleComposePress = () => {
-    Alert.alert(
-      "Coming soon",
-      "Creating a new post will be available in a future update.",
-    );
+    router.push("/create-post");
   };
 
   // `{ item }: { item: CommunityPost }` destructures FlatList's render

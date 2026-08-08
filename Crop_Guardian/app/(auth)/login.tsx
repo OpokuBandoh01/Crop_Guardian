@@ -124,7 +124,7 @@ export default function LoginScreen() {
           control={control}
           name="email"
           render={({ field: { onChange, value } }) => (
-            <View>
+            <View collapsable={false}>
               <CustomInput
                 placeholder="Email"
                 leftIcon="mail-outline"
@@ -154,7 +154,7 @@ export default function LoginScreen() {
           control={control}
           name="password"
           render={({ field: { onChange, value } }) => (
-            <View>
+            <View collapsable={false}>
               <CustomInput
                 placeholder="Password"
                 leftIcon="lock-closed-outline"

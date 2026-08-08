@@ -11,7 +11,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -311,7 +311,7 @@ export default function SignUpScreen() {
         <View style={styles.row}>
           {/* halfInputWrapper wraps both the input AND its error text
               so the error always appears directly below its own field */}
-          <View style={styles.halfInputWrapper}>
+          <View style={styles.halfInputWrapper} collapsable={false}>
             <Controller
               control={control}
               name="firstName"
@@ -344,7 +344,7 @@ export default function SignUpScreen() {
             )}
           </View>
 
-          <View style={styles.halfInputWrapper}>
+          <View style={styles.halfInputWrapper} collapsable={false}>
             <Controller
               control={control}
               name="lastName"
@@ -378,7 +378,7 @@ export default function SignUpScreen() {
           control={control}
           name="email"
           render={({ field: { onChange, onBlur, value } }) => (
-            <View>
+            <View collapsable={false}>
               <CustomInput
                 placeholder="Email Address"
                 leftIcon="mail-outline"
@@ -440,7 +440,7 @@ export default function SignUpScreen() {
             </View>
           )}
         />
-        ;
+
         {errors.phoneNumber && (
           <Text
             style={[
@@ -531,7 +531,7 @@ export default function SignUpScreen() {
           control={control}
           name="password"
           render={({ field: { onChange, onBlur, value } }) => (
-            <View>
+            <View collapsable={false}>
               <CustomInput
                 placeholder="Password"
                 leftIcon="lock-closed-outline"
@@ -566,7 +566,7 @@ export default function SignUpScreen() {
           control={control}
           name="confirmPassword"
           render={({ field: { onChange, onBlur, value } }) => (
-            <View>
+            <View collapsable={false}>
               <CustomInput
                 placeholder="Confirm Password"
                 leftIcon="lock-closed-outline"

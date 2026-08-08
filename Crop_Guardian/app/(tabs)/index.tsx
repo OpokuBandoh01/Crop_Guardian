@@ -168,7 +168,6 @@ export default function HomeScreen() {
                 resizeMode="contain"
               />
             </View>
-            ;
             <Text style={[styles.subtitleText, { color: theme.icon }]}>
               {"Let's make today a productive"}
               {"\n"}

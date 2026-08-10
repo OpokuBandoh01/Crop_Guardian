@@ -4,6 +4,7 @@
 //             collapse back to mid height
 //             (2) keyboard no longer covers the input — uses KeyboardStickyView
 //                 from react-native-keyboard-controller (already in app root)
+// //UPDATED : show author reputationScore next to names (post header, comments, replies).
 //
 // Matches the provided screenshot: original post at top, threaded comments,
 // helpful/solved pills, reply nesting (one level), and a pinned composer.
@@ -27,13 +28,13 @@
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
-    createCommentReply,
-    createPostComment,
-    fetchPostComments,
-    markCommentHelpful,
-    markCommentSolved,
-    unmarkCommentHelpful,
-    unmarkCommentSolved,
+  createCommentReply,
+  createPostComment,
+  fetchPostComments,
+  markCommentHelpful,
+  markCommentSolved,
+  unmarkCommentHelpful,
+  unmarkCommentSolved,
 } from "@/services/communityApi";
 import { useAuthStore } from "@/stores/authStore";
 import type { CommunityComment, CommunityPost } from "@/types/community";
@@ -42,34 +43,34 @@ import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    FlatList,
-    Image,
-    Modal,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 // GestureHandlerRootView is required INSIDE React Native Modal because Modal
 // renders in a separate native window and does not inherit the root GH root.
 // Docs: https://docs.swmansion.com/react-native-gesture-handler/docs/fundamentals/installation
 import {
-    Gesture,
-    GestureDetector,
-    GestureHandlerRootView,
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
 } from "react-native-gesture-handler";
 import { KeyboardStickyView } from "react-native-keyboard-controller";
 import Animated, {
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
@@ -383,12 +384,25 @@ export default function CommentsModal({
 
           <View style={styles.commentBody}>
             <View style={styles.commentHeaderLine}>
+              {/* //UPDATED : name + reputation score on the same line */}
               <Text
                 style={[styles.commentAuthor, { color: theme.text }]}
                 numberOfLines={1}
               >
                 {item.author.fullName}
               </Text>
+              {/* //NEW ADDITION : subtle reputation badge beside comment author name */}
+              <View style={styles.reputationBadge}>
+                <Ionicons
+                  name="star"
+                  size={moderateScale(10)}
+                  color="#F59E0B"
+                />
+                <Text style={styles.reputationText}>
+                  {item.author.reputationScore ?? 0}
+                </Text>
+              </View>
+              {/* //NO CHANGES : relative time stays after the score */}
               <Text
                 style={[styles.commentTime, { color: theme.tabIconDefault }]}
               >
@@ -551,12 +565,25 @@ export default function CommentsModal({
               )}
               <View style={styles.replyBody}>
                 <View style={styles.commentHeaderLine}>
+                  {/* //UPDATED : reply author name + reputation score */}
                   <Text
                     style={[styles.commentAuthor, { color: theme.text }]}
                     numberOfLines={1}
                   >
                     {reply.author.fullName}
                   </Text>
+                  {/* //NEW ADDITION : reputation badge on replies too */}
+                  <View style={styles.reputationBadge}>
+                    <Ionicons
+                      name="star"
+                      size={moderateScale(10)}
+                      color="#F59E0B"
+                    />
+                    <Text style={styles.reputationText}>
+                      {reply.author.reputationScore ?? 0}
+                    </Text>
+                  </View>
+                  {/* //NO CHANGES : Author badge when the reply is from the post owner */}
                   {isAuthorReply && (
                     <View style={styles.authorBadge}>
                       <Text style={styles.authorBadgeText}>Author</Text>
@@ -621,12 +648,27 @@ export default function CommentsModal({
                 </View>
               )}
               <View style={styles.postHeaderText}>
-                <Text
-                  style={[styles.postAuthor, { color: theme.text }]}
-                  numberOfLines={1}
-                >
-                  {post.author.fullName}
-                </Text>
+                {/* //UPDATED : post author name row now includes reputation score */}
+                <View style={styles.nameRow}>
+                  <Text
+                    style={[styles.postAuthor, { color: theme.text }]}
+                    numberOfLines={1}
+                  >
+                    {post.author.fullName}
+                  </Text>
+                  {/* //NEW ADDITION : reputation badge in the modal post header */}
+                  <View style={styles.reputationBadge}>
+                    <Ionicons
+                      name="star"
+                      size={moderateScale(11)}
+                      color="#F59E0B"
+                    />
+                    <Text style={styles.reputationText}>
+                      {post.author.reputationScore ?? 0}
+                    </Text>
+                  </View>
+                </View>
+                {/* //NO CHANGES : region + time meta */}
                 <Text
                   style={[styles.postMeta, { color: theme.tabIconDefault }]}
                   numberOfLines={1}
@@ -1065,9 +1107,17 @@ const styles = StyleSheet.create({
     marginLeft: scale(8),
     flex: 1,
   },
+  // //NEW ADDITION : name + score sit on one line in the modal post header
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: scale(6),
+    flexShrink: 1,
+  },
   postAuthor: {
     fontSize: moderateScale(13.5),
     fontWeight: "700",
+    flexShrink: 1,
   },
   postMeta: {
     fontSize: moderateScale(10.5),
@@ -1155,6 +1205,22 @@ const styles = StyleSheet.create({
   commentAuthor: {
     fontSize: moderateScale(12.5),
     fontWeight: "700",
+    flexShrink: 1,
+  },
+  // //NEW ADDITION : shared subtle reputation badge (star + number)
+  reputationBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: scale(2),
+    paddingHorizontal: scale(5),
+    paddingVertical: verticalScale(1),
+    borderRadius: moderateScale(8),
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+  },
+  reputationText: {
+    fontSize: moderateScale(10),
+    fontWeight: "700",
+    color: "#D97706",
   },
   commentTime: {
     fontSize: moderateScale(10.5),

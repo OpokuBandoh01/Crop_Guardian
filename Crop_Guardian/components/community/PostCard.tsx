@@ -1,7 +1,8 @@
 // components/community/PostCard.tsx
 // //UPDATED : wired the comment icon to open the Comments slide-up modal
 //            instead of the previous "Coming soon" Alert.
-// //NO CHANGES to layout, styles, like handling, or Follow button behavior.
+// //UPDATED : show author reputationScore next to the name (subtle star + number).
+// //NO CHANGES to layout structure, like handling, or Follow button behavior.
 //
 // One post in the Community feed. Matches the screenshot layout: avatar
 // + name + region/time + Follow button, post text, up to 3 images, tag
@@ -88,12 +89,27 @@ export default function PostCard({
           )}
 
           <View style={styles.headerTextBlock}>
-            <Text
-              style={[styles.authorName, { color: theme.text }]}
-              numberOfLines={1}
-            >
-              {post.author.fullName}
-            </Text>
+            {/* //UPDATED : name row now includes reputation score beside the name */}
+            <View style={styles.nameRow}>
+              <Text
+                style={[styles.authorName, { color: theme.text }]}
+                numberOfLines={1}
+              >
+                {post.author.fullName}
+              </Text>
+              {/* //NEW ADDITION : subtle reputation badge (star + score) for social proof */}
+              <View style={styles.reputationBadge}>
+                <Ionicons
+                  name="star"
+                  size={moderateScale(11)}
+                  color="#F59E0B"
+                />
+                <Text style={styles.reputationText}>
+                  {post.author.reputationScore ?? 0}
+                </Text>
+              </View>
+            </View>
+            {/* //NO CHANGES : region + relative time meta line */}
             <Text
               style={[styles.metaText, { color: theme.icon }]}
               numberOfLines={1}
@@ -206,7 +222,7 @@ export default function PostCard({
   );
 }
 
-// //NO CHANGES to styles
+// //UPDATED : added nameRow + reputationBadge styles; everything else unchanged
 const styles = StyleSheet.create({
   card: {
     borderRadius: moderateScale(14),
@@ -247,9 +263,32 @@ const styles = StyleSheet.create({
     marginLeft: scale(8),
     flex: 1,
   },
+  // //NEW ADDITION : horizontal row so name + score sit on one line
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: scale(6),
+    flexShrink: 1,
+  },
   authorName: {
     fontSize: moderateScale(13.5),
     fontWeight: "700",
+    flexShrink: 1,
+  },
+  // //NEW ADDITION : small star + score badge (subtle, not heavy)
+  reputationBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: scale(2),
+    paddingHorizontal: scale(5),
+    paddingVertical: verticalScale(1),
+    borderRadius: moderateScale(8),
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+  },
+  reputationText: {
+    fontSize: moderateScale(10.5),
+    fontWeight: "700",
+    color: "#D97706",
   },
   metaText: {
     fontSize: moderateScale(10.5),

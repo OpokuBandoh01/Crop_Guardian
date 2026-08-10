@@ -6,9 +6,12 @@
 
 import API from "@/services/api";
 import type {
+  CommentMarkResponse,
   CommunitySimpleResponse,
+  CreateCommentResponse,
   CreatePostPayload,
   CreatePostResponse,
+  GetCommentsResponse,
   GetPostsParams,
   GetPostsResponse,
   GetTagsResponse,
@@ -103,6 +106,84 @@ export async function createCommunityPost(
         "Content-Type": "multipart/form-data",
       },
     },
+  );
+  return res.data;
+}
+
+export async function fetchPostComments(
+  postId: string,
+  params?: { page?: number; limit?: number },
+): Promise<GetCommentsResponse> {
+  const res = await API.get<GetCommentsResponse>(
+    `/api/community/posts/${postId}/comments`,
+    { params },
+  );
+  return res.data;
+}
+
+export async function createPostComment(
+  postId: string,
+  content: string,
+): Promise<CreateCommentResponse> {
+  const res = await API.post<CreateCommentResponse>(
+    `/api/community/posts/${postId}/comments`,
+    { content },
+  );
+  return res.data;
+}
+
+export async function createCommentReply(
+  commentId: string,
+  content: string,
+): Promise<CreateCommentResponse> {
+  const res = await API.post<CreateCommentResponse>(
+    `/api/community/comments/${commentId}/replies`,
+    { content },
+  );
+  return res.data;
+}
+
+export async function deleteComment(
+  commentId: string,
+): Promise<CommunitySimpleResponse> {
+  const res = await API.delete<CommunitySimpleResponse>(
+    `/api/community/comments/${commentId}`,
+  );
+  return res.data;
+}
+
+export async function markCommentHelpful(
+  commentId: string,
+): Promise<CommentMarkResponse> {
+  const res = await API.post<CommentMarkResponse>(
+    `/api/community/comments/${commentId}/helpful`,
+  );
+  return res.data;
+}
+
+export async function unmarkCommentHelpful(
+  commentId: string,
+): Promise<CommentMarkResponse> {
+  const res = await API.delete<CommentMarkResponse>(
+    `/api/community/comments/${commentId}/helpful`,
+  );
+  return res.data;
+}
+
+export async function markCommentSolved(
+  commentId: string,
+): Promise<CommentMarkResponse> {
+  const res = await API.post<CommentMarkResponse>(
+    `/api/community/comments/${commentId}/solved`,
+  );
+  return res.data;
+}
+
+export async function unmarkCommentSolved(
+  commentId: string,
+): Promise<CommentMarkResponse> {
+  const res = await API.delete<CommentMarkResponse>(
+    `/api/community/comments/${commentId}/solved`,
   );
   return res.data;
 }

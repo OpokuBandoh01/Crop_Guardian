@@ -107,3 +107,47 @@ export interface CreatePostResponse {
   message: string;
   data: CommunityPost;
 }
+
+export interface CommunityCommentAuthor {
+  id: string;
+  fullName: string;
+  avatarUrl: string | null;
+  reputationScore: number;
+}
+
+export interface CommunityComment {
+  id: string;
+  postId: string;
+  // null for a top-level comment, the parent comment id for a reply
+  parentId: string | null;
+  content: string;
+  helpfulCount: number;
+  solvedCount: number;
+  createdAt: string;
+  author: CommunityCommentAuthor;
+  // Only present on top-level comments. Replies omit this field.
+  replies?: CommunityComment[];
+}
+
+export interface GetCommentsResponse {
+  success: boolean;
+  message: string;
+  data: CommunityComment[];
+  pagination: CommunityPagination;
+}
+
+export interface CreateCommentResponse {
+  success: boolean;
+  message: string;
+  data: CommunityComment;
+}
+
+export interface CommentMarkResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    commentId: string;
+    helpfulCount: number;
+    solvedCount: number;
+  };
+}

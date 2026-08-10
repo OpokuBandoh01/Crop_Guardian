@@ -7,6 +7,7 @@
 // silently doing nothing or being hidden.
 
 import CategoriesRow from "@/components/community/CategoriesRow";
+import CommentsModal from "@/components/community/CommentsModal";
 import PostCard from "@/components/community/PostCard";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -15,7 +16,7 @@ import { useNotificationStore } from "@/stores/notificationStore";
 import type { CommunityPost } from "@/types/community";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -66,6 +67,8 @@ export default function CommunityScreen() {
     toggleLike,
   } = useCommunityStore();
 
+  const [commentsPost, setCommentsPost] = useState<CommunityPost | null>(null);
+
   // Any of these three being true means a feed-affecting request is in
   // flight, so search/filter/category/tab controls disable together, per
   // the project-wide rule of disabling clickables while something loads.
@@ -112,15 +115,16 @@ export default function CommunityScreen() {
     router.push("/create-post");
   };
 
-  // `{ item }: { item: CommunityPost }` destructures FlatList's render
-  // argument and types it against our CommunityPost interface, so
-  // `item.author`, `item.tags`, etc. are all autocompleted and
-  // type-checked inside PostCard's props below.
+  const handleCommentAdded = (postId: string) => {
+    refreshPosts();
+  };
+
   const renderItem = ({ item }: { item: CommunityPost }) => (
     <PostCard
       post={item}
       onLikePress={toggleLike}
       isLiking={Boolean(likingPostIds[item.id])}
+      onCommentPress={setCommentsPost}
     />
   );
 
@@ -324,6 +328,13 @@ export default function CommunityScreen() {
       >
         <Ionicons name="add" size={moderateScale(26)} color="#FFFFFF" />
       </TouchableOpacity>
+
+      <CommentsModal
+        visible={commentsPost !== null}
+        post={commentsPost}
+        onClose={() => setCommentsPost(null)}
+        onCommentAdded={handleCommentAdded}
+      />
     </SafeAreaView>
   );
 }

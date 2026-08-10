@@ -1,13 +1,11 @@
 // components/community/PostCard.tsx
+// //UPDATED : wired the comment icon to open the Comments slide-up modal
+//            instead of the previous "Coming soon" Alert.
+// //NO CHANGES to layout, styles, like handling, or Follow button behavior.
+//
 // One post in the Community feed. Matches the screenshot layout: avatar
 // + name + region/time + Follow button, post text, up to 3 images, tag
 // chips, then a like/comment footer.
-//
-// Follow, opening the full post, and the comment icon all point at
-// screens/features that do not exist yet in this step-by-step build, so
-// they stay visible and tappable (per instruction, not hidden) but show
-// a plain "Coming soon" message instead of navigating anywhere. Liking a
-// post IS wired to the real backend, since that endpoint already exists.
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -16,12 +14,12 @@ import { formatRelativeTime } from "@/utils/timeFormat";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import {
-    Alert,
-    Image,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
@@ -29,15 +27,11 @@ interface PostCardProps {
   post: CommunityPost;
   onLikePress: (postId: string) => void;
   isLiking: boolean;
+  // //NEW ADDITION : opens the Comments modal for this post
+  onCommentPress: (post: CommunityPost) => void;
 }
 
-// A small helper local to this file. `GestureResponderEvent` is the type
-// React Native gives every onPress handler; we only need `.stopPropagation`
-// off it here, so it is typed loosely as `{ stopPropagation: () => void }`
-// rather than importing the full RN event type just for this one call.
 function stopBubble(e: { stopPropagation: () => void }) {
-  // Prevents a tap on a button INSIDE the card (Follow, like, comment)
-  // from also triggering the card's own onPress (which opens the post).
   e.stopPropagation();
 }
 
@@ -45,6 +39,7 @@ export default function PostCard({
   post,
   onLikePress,
   isLiking,
+  onCommentPress, // //NEW ADDITION
 }: PostCardProps) {
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
@@ -56,8 +51,6 @@ export default function PostCard({
     );
   };
 
-  // Simple initials fallback for authors without an avatar photo yet,
-  // e.g. "Kofi Mensah" -> "KM".
   const initials = post.author.fullName
     .split(" ")
     .map((part) => part.charAt(0))
@@ -72,9 +65,10 @@ export default function PostCard({
         { backgroundColor: theme.surface, borderColor: theme.inputBorder },
       ]}
       activeOpacity={0.85}
+      // //NO CHANGES : full-post view still coming soon
       onPress={() => showComingSoon("Viewing the full post")}
     >
-      {/* ── Header: avatar, name, region + time, Follow button ── */}
+      {/* //NO CHANGES */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           {post.author.avatarUrl ? (
@@ -111,6 +105,7 @@ export default function PostCard({
           </View>
         </View>
 
+        {/* //NO CHANGES : Follow still coming soon */}
         <TouchableOpacity
           style={[styles.followButton, { backgroundColor: theme.primary }]}
           activeOpacity={0.8}
@@ -123,12 +118,12 @@ export default function PostCard({
         </TouchableOpacity>
       </View>
 
-      {/* ── Post text ── */}
+      {/* //NO CHANGES */}
       <Text style={[styles.content, { color: theme.text }]} numberOfLines={4}>
         {post.content}
       </Text>
 
-      {/* ── Images (up to 3) ── */}
+      {/* //NO CHANGES */}
       {post.imageUrls.length > 0 && (
         <View style={styles.imagesRow}>
           {post.imageUrls.slice(0, 3).map((url, idx) => (
@@ -137,8 +132,6 @@ export default function PostCard({
               source={{ uri: url }}
               style={[
                 styles.postImage,
-                // A single image gets more width so it does not look
-                // tiny next to two empty slots.
                 post.imageUrls.length === 1 && styles.postImageSingle,
               ]}
               resizeMode="cover"
@@ -147,7 +140,7 @@ export default function PostCard({
         </View>
       )}
 
-      {/* ── Tag chips ── */}
+      {/* //NO CHANGES */}
       {post.tags.length > 0 && (
         <View style={styles.tagsRow}>
           {post.tags.map((tag) => (
@@ -169,8 +162,8 @@ export default function PostCard({
         </View>
       )}
 
-      {/* ── Footer: like + comment counts ── */}
       <View style={styles.footerRow}>
+        {/* //NO CHANGES : like still wired to backend */}
         <TouchableOpacity
           style={styles.footerAction}
           activeOpacity={0.7}
@@ -190,12 +183,13 @@ export default function PostCard({
           </Text>
         </TouchableOpacity>
 
+        {/* //UPDATED : open Comments modal instead of Coming soon Alert */}
         <TouchableOpacity
           style={styles.footerAction}
           activeOpacity={0.7}
           onPress={(e) => {
             stopBubble(e);
-            showComingSoon("Comments");
+            onCommentPress(post);
           }}
         >
           <Ionicons
@@ -212,6 +206,7 @@ export default function PostCard({
   );
 }
 
+// //NO CHANGES to styles
 const styles = StyleSheet.create({
   card: {
     borderRadius: moderateScale(14),

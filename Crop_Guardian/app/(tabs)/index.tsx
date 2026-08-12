@@ -5,13 +5,17 @@ import DailyTipCard from "@/components/daily-tips/DailyTipCard"; // NEW ADDITION
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import API from "@/services/api";
+import { confidenceLabel, fetchMyDetections } from "@/services/detectionApi";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { useTipStore } from "@/stores/tipStore"; // NEW ADDITION
+import { DetectionListItem } from "@/types/detection";
+import { formatRelativeTime } from "@/utils/timeFormat";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useNavigation, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect, useNavigation, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   RefreshControl,
   ScrollView,
@@ -38,6 +42,34 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [weatherRefreshTrigger, setWeatherRefreshTrigger] = useState(0);
 
+  // //NEW ADDITION : latest detection for the Recent Scan card
+  const [latestDetection, setLatestDetection] =
+    useState<DetectionListItem | null>(null);
+  const [latestLoading, setLatestLoading] = useState(false);
+
+  const loadLatestDetection = useCallback(async () => {
+    setLatestLoading(true);
+    try {
+      const result = await fetchMyDetections({ page: 1, limit: 1 });
+      if (result.success && result.data.length > 0) {
+        setLatestDetection(result.data[0]);
+      } else {
+        setLatestDetection(null);
+      }
+    } catch {
+      setLatestDetection(null);
+    } finally {
+      setLatestLoading(false);
+    }
+  }, []);
+
+  // //NEW ADDITION : refresh recent scan whenever Home gains focus
+  useFocusEffect(
+    useCallback(() => {
+      loadLatestDetection();
+    }, [loadLatestDetection]),
+  );
+
   const getGreeting = (): string => {
     const hour = new Date().getHours();
 
@@ -58,13 +90,14 @@ export default function HomeScreen() {
     setWeatherRefreshTrigger((prev) => prev + 1);
     // UPDATED: added fetchTodayTips() so pulling to refresh on the home
     // screen also refreshes the daily tips card, matching the other cards.
+
     await Promise.all([
       fetchUser(),
       fetchMyCrops(),
       fetchNotifications(),
       fetchTodayTips(),
+      loadLatestDetection(), // //NEW ADDITION
     ]);
-    setRefreshing(false);
   };
 
   const fetchUser = async () => {
@@ -547,6 +580,7 @@ export default function HomeScreen() {
           <DailyTipCard />
 
           {/* Card 2: Recent Scan */}
+          {/* //UPDATED : live data from GET /api/detection/my?limit=1 */}
           <View
             style={[
               styles.bottomCard,
@@ -559,6 +593,8 @@ export default function HomeScreen() {
               <TouchableOpacity
                 activeOpacity={0.7}
                 style={styles.seeAllRecentRow}
+                disabled={latestLoading}
+                onPress={() => router.push("/detections" as any)}
               >
                 <Text style={styles.recentScanSeeAll}>See all</Text>
                 <Ionicons
@@ -569,17 +605,64 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <Image
-              source={require("@/assets/images/recentscanimage.png")}
-              style={styles.recentScanImage}
-              resizeMode="cover"
-            />
+            {latestLoading && !latestDetection ? (
+              <ActivityIndicator
+                color="#2E7D32"
+                style={{ marginVertical: verticalScale(20) }}
+              />
+            ) : latestDetection ? (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                disabled={latestLoading}
+                onPress={() =>
+                  router.push(`/detection/${latestDetection.id}` as any)
+                }
+              >
+                {latestDetection.imageUrl ? (
+                  <Image
+                    source={{ uri: latestDetection.imageUrl }}
+                    style={styles.recentScanImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Image
+                    source={require("@/assets/images/recentscanimage.png")}
+                    style={styles.recentScanImage}
+                    resizeMode="cover"
+                  />
+                )}
 
-            <View style={styles.recentScanDetails}>
-              <Text style={styles.recentScanDisease}>Maize Leaf Blight</Text>
-              <Text style={styles.recentScanConfidence}>High Confidence</Text>
-              <Text style={styles.recentScanTime}>Scan today, 8:30AM</Text>
-            </View>
+                <View style={styles.recentScanDetails}>
+                  <Text style={styles.recentScanDisease} numberOfLines={1}>
+                    {latestDetection.diseaseName}
+                  </Text>
+                  <Text style={styles.recentScanConfidence}>
+                    {confidenceLabel(latestDetection.confidence)}
+                  </Text>
+                  <Text style={styles.recentScanTime}>
+                    {formatRelativeTime(latestDetection.createdAt)}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => router.push("/scan" as any)}
+              >
+                <Image
+                  source={require("@/assets/images/recentscanimage.png")}
+                  style={styles.recentScanImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.recentScanDetails}>
+                  <Text style={styles.recentScanDisease}>No scans yet</Text>
+                  <Text style={styles.recentScanConfidence}>
+                    Take a photo to start
+                  </Text>
+                  <Text style={styles.recentScanTime}>Tap to scan</Text>
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Card 3: Weather Alert */}

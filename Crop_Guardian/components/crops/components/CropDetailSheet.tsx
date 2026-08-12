@@ -198,7 +198,34 @@ export default function CropDetailSheet({
           ) : null}
 
           {/* ---- Section label: matches home's sectionTitle style ---- */}
-          <Text style={styles.historyTitle}>Scan History</Text>
+          {/* //UPDATED : title row + link to full detections list filtered by this crop */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Text style={styles.historyTitle}>Scan History</Text>
+            <TouchableOpacity
+              onPress={() => {
+                onClose();
+                router.push(
+                  `/detections?cropType=${selectedCrop.cropType}` as any,
+                );
+              }}
+            >
+              <Text
+                style={{
+                  color: "#094A04",
+                  fontWeight: "700",
+                  fontSize: 12,
+                }}
+              >
+                View all
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {historyLoading ? (
             // Primary green spinner matching home's RefreshControl tintColor
@@ -239,7 +266,15 @@ export default function CropDetailSheet({
                  * giving a subtle "inset" feel against the white sheet.
                  * This mirrors how home uses its background as a card-on-card contrast.
                  */
-                <View key={item.id} style={styles.historyItem}>
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.historyItem}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    onClose();
+                    router.push(`/detection/${item.id}` as any);
+                  }}
+                >
                   <View style={styles.historyItemHeader}>
                     {/* #11181C matches home's primary heading text color */}
                     <Text style={styles.historyDiseaseName} numberOfLines={1}>
@@ -278,7 +313,7 @@ export default function CropDetailSheet({
                       {item.symptoms}
                     </Text>
                   ) : null}
-                </View>
+                </TouchableOpacity>
               ))}
             </ScrollView>
           )}

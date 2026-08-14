@@ -38,7 +38,7 @@ export async function fetchMyDetections(
   const page = params.page ?? 1;
 
   try {
-    const res = await API.get<GetMyDetectionsResponse>("/api/detection/my", {
+    const res = await API.get<GetMyDetectionsResponse>("/api/detections/my", {
       params: {
         page,
         limit: params.limit ?? 10,
@@ -83,9 +83,7 @@ export async function fetchDetectionById(
   id: string,
 ): Promise<GetDetectionByIdResponse & { fromCache?: boolean }> {
   try {
-    const res = await API.get<GetDetectionByIdResponse>(
-      `/api/detection/${id}`,
-    );
+    const res = await API.get<GetDetectionByIdResponse>(`/api/detection/${id}`);
 
     if (res.data.success && res.data.data) {
       try {

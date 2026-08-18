@@ -1,13 +1,15 @@
 // stores/weatherStore.ts
 
 import API from "@/services/api";
-import { getLocationName } from "@/utils/utilities";
+import { getLocationName, weatherCodeMap } from "@/utils/utilities";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 const CACHE_DURATION_MS = 15 * 60 * 1000;
+
+const OPEN_METEO_BASE = "https://api.open-meteo.com/v1/forecast";
 
 export interface BackendCurrent {
   time: string;
@@ -55,19 +57,45 @@ interface WeatherStore {
   weatherData: WeatherApiData | null;
   locationName: string;
   coords: Coords | null;
-  fetchedAt: number | null; // epoch ms, null means "never fetched"
+  fetchedAt: number | null;
   loading: boolean;
   error: string | null;
   permissionDenied: boolean;
 
-  // force = true bypasses the 15 minute cache, used by pull-to-refresh.
   fetchWeather: (options?: { force?: boolean }) => Promise<void>;
   clearError: () => void;
+}
+
+async function fetchOpenMeteoRaw(latitude: number, longitude: number) {
+  const params = new URLSearchParams({
+    latitude: latitude.toString(),
+    longitude: longitude.toString(),
+    current:
+      "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code",
+    daily:
+      "temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,relative_humidity_2m_max,weather_code",
+    forecast_days: "7",
+    timezone: "auto",
+  });
+
+  const response = await fetch(`${OPEN_METEO_BASE}?${params.toString()}`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Open-Meteo failed with status ${response.status}`);
+  }
+
+  return response.json();
 }
 
 export const useWeatherStore = create<WeatherStore>()(
   persist(
     (set, get) => ({
+      // NO CHANGES
       weatherData: null,
       locationName: "Detecting location...",
       coords: null,
@@ -80,13 +108,8 @@ export const useWeatherStore = create<WeatherStore>()(
         const force = options?.force === true;
         const { fetchedAt, loading, weatherData } = get();
 
-        // Guard against overlapping calls, e.g. widget and screen mounting
-        // in the same tick, both racing to call fetchWeather().
         if (loading) return;
 
-        // Cache hit: if we have data and it is still within the 15 minute
-        // window, and the caller did not explicitly ask to force a refresh,
-        // just return early and let existing state serve the UI.
         const isFresh =
           fetchedAt !== null && Date.now() - fetchedAt < CACHE_DURATION_MS;
         if (!force && weatherData && isFresh) {
@@ -105,18 +128,12 @@ export const useWeatherStore = create<WeatherStore>()(
 
           set({ permissionDenied: false });
 
-          // Speed optimization: try the device's last known cached position
-          // first. This resolves near-instantly since it does not wait for a
-          // brand new GPS/network fix, which is normally the single slowest
-          // part of this whole chain (can take several seconds on its own).
-          // We only fall back to a fresh, slower fix if no cached position
-          // exists yet on the device (e.g. very first app use after install).
           let latitude: number;
           let longitude: number;
 
           const lastKnown = await Location.getLastKnownPositionAsync({
-            maxAge: CACHE_DURATION_MS, // don't reuse a stale/expired fix
-            requiredAccuracy: 5000, // meters, generous since weather doesn't need precision
+            maxAge: CACHE_DURATION_MS,
+            requiredAccuracy: 5000,
           });
 
           if (lastKnown) {
@@ -124,21 +141,22 @@ export const useWeatherStore = create<WeatherStore>()(
             longitude = lastKnown.coords.longitude;
           } else {
             const fresh = await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Balanced, // explicit: weather doesn't need GPS-grade precision
+              accuracy: Location.Accuracy.Balanced,
             });
             latitude = fresh.coords.latitude;
             longitude = fresh.coords.longitude;
           }
 
-          // Reverse geocoding and the weather API call can run at the same
-          // time since neither depends on the other's result, this shaves
-          // off whichever one would otherwise have run second.
-          const [name, res] = await Promise.all([
+          const [name, rawData] = await Promise.all([
             getLocationName(latitude, longitude),
-            API.get("/api/weather/forecast", {
-              params: { lat: latitude, lon: longitude },
-            }),
+            fetchOpenMeteoRaw(latitude, longitude),
           ]);
+
+          const res = await API.post("/api/weather/enrich", {
+            latitude,
+            longitude,
+            rawData,
+          });
 
           if (res.data?.success && res.data.data) {
             set({
@@ -148,11 +166,38 @@ export const useWeatherStore = create<WeatherStore>()(
               fetchedAt: Date.now(),
             });
           } else {
-            set({ error: "Could not load weather data. Please try again." });
+            const fallbackCurrent = rawData.current
+              ? {
+                  ...rawData.current,
+                  weatherDescription:
+                    weatherCodeMap[rawData.current.weather_code] || "Unknown",
+                }
+              : null;
+
+            if (fallbackCurrent && rawData.daily) {
+              set({
+                weatherData: {
+                  location: { latitude, longitude },
+                  current: fallbackCurrent,
+                  daily: {
+                    ...rawData.daily,
+                    weatherDescriptions: (rawData.daily.weather_code || []).map(
+                      (code: number) => weatherCodeMap[code] || "Unknown",
+                    ),
+                  },
+                  riskInsights: [],
+                  overallSummary:
+                    "Weather loaded. Crop risk insights are temporarily unavailable.",
+                },
+                locationName: name,
+                coords: { latitude, longitude },
+                fetchedAt: Date.now(),
+              });
+            } else {
+              set({ error: "Could not load weather data. Please try again." });
+            }
           }
         } catch (err) {
-          // UPDATED: secure, generic message only, detailed error stays in
-          // console for debugging and is never surfaced to the end user.
           console.error("Weather fetch error:", err);
           set({
             error: "Unable to load weather right now. Please try again.",
@@ -167,8 +212,6 @@ export const useWeatherStore = create<WeatherStore>()(
     {
       name: "weather-storage",
       storage: createJSONStorage(() => AsyncStorage),
-      // Only persist the data fields, not transient UI flags like loading
-      // or permissionDenied, those should always reset fresh on app start.
       partialize: (state) => ({
         weatherData: state.weatherData,
         locationName: state.locationName,

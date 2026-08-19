@@ -1,7 +1,11 @@
 // components/LocationEditModal.tsx
+// UPDATED: MapView removed (Option B) to avoid Google Maps API key crash on Android.
+// Users still edit City + Ghana Region. Coordinates are kept from the last GPS
+// detection (or Accra defaults) so the backend still receives valid lat/lng.
+
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Dimensions,
@@ -15,7 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
+// UPDATED: react-native-maps import removed — no MapView means no Google API key needed
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
@@ -26,9 +30,12 @@ import { CustomButton } from "./CustomButton";
 import { CustomInput } from "./CustomInput";
 
 // Screen height is used to set a reliable maxHeight on the sheet.
-// Using Dimensions here (not useWindowDimensions) is fine inside a modal
-// because the modal does not need to respond to orientation changes in this app.
 const SCREEN_HEIGHT = Dimensions.get("window").height;
+
+// Default coordinates (Accra) used only when the user has never detected GPS yet.
+// TypeScript: these are plain numbers so AppLocation.latitude / longitude stay typed as number.
+const DEFAULT_LAT = 5.6037;
+const DEFAULT_LNG = -0.187;
 
 interface LocationEditModalProps {
   isVisible: boolean;
@@ -48,36 +55,33 @@ export const LocationEditModal: React.FC<LocationEditModalProps> = ({
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
 
-  // useSafeAreaInsets gives the real bottom inset (home bar on iPhone,
-  // navigation bar on Android). We add this to the sheet's bottom padding
-  // so the Save button is never hidden behind the system UI.
-  // This is the correct fix for the "sheet at the bottom of the screen
-  // and content is cut off" bug.
+  // useSafeAreaInsets: real bottom inset so the Save button is never hidden
+  // behind the Android navigation bar / iPhone home indicator.
   const insets = useSafeAreaInsets();
 
   const [city, setCity] = useState(currentLocation?.city || "");
   const [region, setRegion] = useState<GhanaRegion | "">(
     (currentLocation?.region as GhanaRegion) || "",
   );
-  const [mapCoords, setMapCoords] = useState({
-    latitude: currentLocation?.latitude || 5.6037,
-    longitude: currentLocation?.longitude || -0.187,
+
+  // Keep the last known coordinates (from GPS detect). We do not let the user
+  // change them in this map-free version, but we still send them to the backend.
+  const [coords, setCoords] = useState({
+    latitude: currentLocation?.latitude ?? DEFAULT_LAT,
+    longitude: currentLocation?.longitude ?? DEFAULT_LNG,
   });
   const [accuracy, setAccuracy] = useState(currentLocation?.accuracy);
 
-  // Ref used to animate the map camera when coords change programmatically
-  const mapRef = useRef<MapView>(null);
-
   // Sync state whenever the modal opens with updated props
   useEffect(() => {
-    if (isVisible && currentLocation) {
-      setCity(currentLocation.city || "");
-      setRegion((currentLocation.region as GhanaRegion) || "");
-      setMapCoords({
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
+    if (isVisible) {
+      setCity(currentLocation?.city || "");
+      setRegion((currentLocation?.region as GhanaRegion) || "");
+      setCoords({
+        latitude: currentLocation?.latitude ?? DEFAULT_LAT,
+        longitude: currentLocation?.longitude ?? DEFAULT_LNG,
       });
-      setAccuracy(currentLocation.accuracy);
+      setAccuracy(currentLocation?.accuracy);
     }
   }, [isVisible, currentLocation]);
 
@@ -89,9 +93,11 @@ export const LocationEditModal: React.FC<LocationEditModalProps> = ({
 
     const address = `${city.trim()}, ${region}, Ghana`;
 
+    // AppLocation requires latitude + longitude. We reuse the last GPS values
+    // (or Accra defaults) so the backend validation still passes.
     const newLocation: AppLocation = {
-      latitude: mapCoords.latitude,
-      longitude: mapCoords.longitude,
+      latitude: coords.latitude,
+      longitude: coords.longitude,
       address,
       city: city.trim(),
       region: region as GhanaRegion,
@@ -107,63 +113,48 @@ export const LocationEditModal: React.FC<LocationEditModalProps> = ({
   };
 
   return (
-    // React Native's built-in Modal renders above all other views including
-    // tab bars and navigation bars, so the BlurView covers the full screen.
+    // React Native Modal + BlurView locks the background and prevents
+    // interaction with the screen behind the sheet (project rule).
     <Modal
       visible={isVisible}
       transparent
       animationType="slide"
       onRequestClose={onClose}
-      // statusBarTranslucent makes the modal extend behind the status bar
-      // on Android, so the BlurView covers the full screen on both platforms.
       statusBarTranslucent
     >
-      {/* BlurView: full-screen frosted glass behind the sheet */}
       <BlurView
         intensity={60}
         tint={colorScheme === "dark" ? "dark" : "light"}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* KeyboardAvoidingView sits INSIDE the modal and wraps everything.
-          This pushes the sheet up when the software keyboard appears so
-          the City input is never hidden. We use "padding" on iOS and
-          "height" on Android because their keyboard behaviours differ. */}
       <KeyboardAvoidingView
         style={styles.kavWrapper}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        // keyboardVerticalOffset accounts for any extra space at the top
-        // (status bar height on Android + a small buffer)
         keyboardVerticalOffset={Platform.OS === "android" ? 24 : 0}
       >
-        {/* Backdrop Pressable: tapping outside the sheet closes it */}
+        {/* Backdrop: tap outside to close */}
         <Pressable style={styles.backdrop} onPress={onClose}>
-          {/* Inner Pressable stops touches on the sheet itself from
-              bubbling up to the backdrop and closing the modal accidentally */}
+          {/* Inner Pressable stops sheet taps from closing the modal */}
           <Pressable
             style={[
               styles.sheet,
               {
                 backgroundColor: theme.background,
-                // Add safe-area bottom inset so the content clears the home bar.
-                // Without this, the Save button sits behind the gesture bar on
-                // modern iPhones and is impossible to tap.
                 paddingBottom: insets.bottom + verticalScale(8),
-                // Cap the sheet at 88% of screen height so it never goes full-screen
-                maxHeight: SCREEN_HEIGHT * 1,
+                maxHeight: SCREEN_HEIGHT * 0.9,
               },
             ]}
-            // Consuming the press event here prevents it reaching the backdrop
             onPress={() => {}}
           >
-            {/* Drag handle — visual affordance */}
+            {/* Drag handle */}
             <View style={styles.handleBar}>
               <View
                 style={[styles.handle, { backgroundColor: theme.inputBorder }]}
               />
             </View>
 
-            {/* Header row */}
+            {/* Header */}
             <View style={styles.headerRow}>
               <View style={styles.headerText}>
                 <Text style={[styles.title, { color: theme.primary }]}>
@@ -186,11 +177,6 @@ export const LocationEditModal: React.FC<LocationEditModalProps> = ({
               </TouchableOpacity>
             </View>
 
-            {/* ScrollView wraps all sheet content.
-                - keyboardShouldPersistTaps="handled" lets region chips receive
-                  taps even when the keyboard is open.
-                - bounces={false} prevents the sheet from rubber-banding against
-                  the outer scroll when the user scrolls to the end. */}
             <ScrollView
               style={styles.scrollArea}
               contentContainerStyle={styles.scrollContent}
@@ -253,38 +239,30 @@ export const LocationEditModal: React.FC<LocationEditModalProps> = ({
                 })}
               </View>
 
-              {/* Map — drag the pin to fine-tune coordinates */}
-              <Text style={[styles.label, { color: theme.primary }]}>
-                Fine-tune pin position
-              </Text>
-              <View style={styles.mapContainer}>
-                <MapView
-                  ref={mapRef}
-                  provider={PROVIDER_GOOGLE}
-                  style={styles.map}
-                  initialRegion={{
-                    latitude: mapCoords.latitude,
-                    longitude: mapCoords.longitude,
-                    latitudeDelta: 0.05,
-                    longitudeDelta: 0.05,
-                  }}
-                  // On Android, allowing the map to scroll while inside a
-                  // ScrollView causes a gesture conflict where the outer scroll
-                  // intercepts map pans. Disabling map scroll on Android forces
-                  // all panning to happen via the draggable marker instead.
-                  scrollEnabled={Platform.OS === "ios"}
-                  pitchEnabled={false}
-                  rotateEnabled={false}
-                >
-                  <Marker
-                    coordinate={mapCoords}
-                    draggable
-                    onDragEnd={(e) => setMapCoords(e.nativeEvent.coordinate)}
-                  />
-                </MapView>
+              {/* NEW ADDITION: gentle note so the user understands coordinates
+                  still come from the last GPS detect (psychology + clarity) */}
+              <View
+                style={[
+                  styles.infoBox,
+                  {
+                    backgroundColor:
+                      colorScheme === "light" ? "#EBF7E9" : "#1E2C20",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="information-circle-outline"
+                  size={moderateScale(16)}
+                  color={theme.primary}
+                />
+                <Text style={[styles.infoText, { color: theme.text }]}>
+                  Pin coordinates stay from your last GPS detection. Use “Detect
+                  / Update Location” on the signup screen if you want fresh
+                  coordinates.
+                </Text>
               </View>
 
-              {/* Action Buttons */}
+              {/* Action Buttons — always disabled while loading */}
               <View style={styles.buttonRow}>
                 <View style={styles.buttonHalf}>
                   <CustomButton
@@ -312,45 +290,33 @@ export const LocationEditModal: React.FC<LocationEditModalProps> = ({
 };
 
 const styles = StyleSheet.create({
-  // KeyboardAvoidingView needs flex:1 to fill the modal's full screen area
   kavWrapper: {
     flex: 1,
-    justifyContent: "flex-end", // push the sheet to the bottom of the screen
+    justifyContent: "flex-end",
   },
-
-  // Backdrop fills the space above the sheet.
-  // flex:1 + justifyContent:"flex-end" means the sheet sticks to the bottom
-  // and the backdrop fills everything above it.
   backdrop: {
     flex: 1,
     justifyContent: "flex-end",
   },
-
-  // Bottom sheet panel
   sheet: {
     borderTopLeftRadius: moderateScale(24),
     borderTopRightRadius: moderateScale(24),
     paddingTop: verticalScale(8),
-    // Shadow for iOS
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
-    // Elevation for Android
     elevation: 20,
   },
-
   handleBar: {
     alignItems: "center",
     paddingBottom: verticalScale(8),
   },
-
   handle: {
     width: scale(40),
     height: verticalScale(4),
     borderRadius: 4,
   },
-
   headerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -358,74 +324,65 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(20),
     paddingBottom: verticalScale(12),
   },
-
-  // Constrain the header text so the close button is always visible
   headerText: {
     flex: 1,
     marginRight: scale(12),
   },
-
   title: {
     fontSize: moderateScale(20),
     fontWeight: "700",
     marginBottom: verticalScale(2),
   },
-
   subtitle: {
     fontSize: moderateScale(12),
   },
-
-  // ScrollView expands to fill the remaining height inside the sheet
   scrollArea: {
-    flexGrow: 0, // do NOT let the scroll area push the sheet taller than maxHeight
+    flexGrow: 0,
   },
-
   scrollContent: {
     paddingHorizontal: scale(20),
     paddingBottom: verticalScale(16),
   },
-
   label: {
     fontSize: moderateScale(12),
     fontWeight: "600",
     marginBottom: verticalScale(8),
     marginTop: verticalScale(4),
   },
-
   regionGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: scale(8),
     marginBottom: verticalScale(16),
   },
-
   regionChip: {
     borderWidth: 1,
     borderRadius: moderateScale(20),
     paddingHorizontal: scale(12),
     paddingVertical: verticalScale(6),
   },
-
   regionChipText: {
     fontSize: moderateScale(12),
   },
-
-  mapContainer: {
-    height: verticalScale(180),
-    borderRadius: moderateScale(12),
-    overflow: "hidden",
+  // NEW ADDITION: info note styles
+  infoBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: scale(8),
+    padding: scale(12),
+    borderRadius: moderateScale(10),
     marginBottom: verticalScale(16),
   },
-
-  map: {
+  infoText: {
     flex: 1,
+    fontSize: moderateScale(11.5),
+    lineHeight: moderateScale(16),
+    fontWeight: "500",
   },
-
   buttonRow: {
     flexDirection: "row",
     gap: scale(12),
   },
-
   buttonHalf: {
     flex: 1,
   },

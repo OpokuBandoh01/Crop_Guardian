@@ -1,4 +1,4 @@
-// app/(tabs)/profile.tsx  -- adjust the path comment if yours differs
+// app/(tabs)/profile.tsx
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
@@ -35,10 +35,6 @@ export default function ProfileScreen() {
 
   const themePreference = useThemeStore((state) => state.themePreference);
 
-  // NEW ADDITION: one hook replaces the old manual AsyncStorage + API.get
-  // fetchUserData() function and its navigation "focus" listener. The hook
-  // itself refetches on mount, screens that want a manual refresh (like
-  // pull-to-refresh below) just call `refetch()`.
   const { user, stats, loading, refreshing, refetch } = useUserProfile();
 
   const handlePress = (screen: string) => {
@@ -66,6 +62,8 @@ export default function ProfileScreen() {
       router.push("/about-us");
     } else if (screen === "Rate Us") {
       router.push("/rate-us");
+    } else if (screen === "Saved Posts") {
+      router.push("/saved-posts");
     }
   };
 
@@ -295,6 +293,15 @@ export default function ProfileScreen() {
             undefined,
             false,
             () => handlePress("Offline Database"),
+          )}
+          <View style={styles.rowDivider} />;
+          {renderRow(
+            "Saved Posts",
+            "Posts you bookmarked from the community",
+            { name: "bookmark-outline", type: "ionicons" },
+            undefined,
+            false,
+            () => handlePress("Saved Posts"),
           )}
         </View>
 

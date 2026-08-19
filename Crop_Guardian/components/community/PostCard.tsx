@@ -1,12 +1,4 @@
 // components/community/PostCard.tsx
-// //UPDATED : wired the comment icon to open the Comments slide-up modal
-//            instead of the previous "Coming soon" Alert.
-// //UPDATED : show author reputationScore next to the name (subtle star + number).
-// //NO CHANGES to layout structure, like handling, or Follow button behavior.
-//
-// One post in the Community feed. Matches the screenshot layout: avatar
-// + name + region/time + Follow button, post text, up to 3 images, tag
-// chips, then a like/comment footer.
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -26,10 +18,15 @@ import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
 interface PostCardProps {
   post: CommunityPost;
+  currentUserId?: string | null;
   onLikePress: (postId: string) => void;
-  isLiking: boolean;
-  // //NEW ADDITION : opens the Comments modal for this post
+  onSavePress: (postId: string) => void;
+  onFollowPress: (userId: string) => void;
   onCommentPress: (post: CommunityPost) => void;
+  isLiking: boolean;
+  isSaving: boolean;
+  isFollowLoading: boolean;
+  isFollowing: boolean;
 }
 
 function stopBubble(e: { stopPropagation: () => void }) {
@@ -40,10 +37,13 @@ export default function PostCard({
   post,
   onLikePress,
   isLiking,
-  onCommentPress, // //NEW ADDITION
+  onCommentPress,
+  currentUserId,
 }: PostCardProps) {
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
+
+  const isOwnPost = Boolean(currentUserId && post.author.id === currentUserId);
 
   const showComingSoon = (feature: string) => {
     Alert.alert(
@@ -66,10 +66,8 @@ export default function PostCard({
         { backgroundColor: theme.surface, borderColor: theme.inputBorder },
       ]}
       activeOpacity={0.85}
-      // //NO CHANGES : full-post view still coming soon
-      onPress={() => showComingSoon("Viewing the full post")}
+      onPress={() => onCommentPress(post)}
     >
-      {/* //NO CHANGES */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           {post.author.avatarUrl ? (
@@ -97,7 +95,7 @@ export default function PostCard({
               >
                 {post.author.fullName}
               </Text>
-              {/* //NEW ADDITION : subtle reputation badge (star + score) for social proof */}
+              {/* //subtle reputation badge (star + score) for social proof */}
               <View style={styles.reputationBadge}>
                 <Ionicons
                   name="star"
@@ -109,7 +107,7 @@ export default function PostCard({
                 </Text>
               </View>
             </View>
-            {/* //NO CHANGES : region + relative time meta line */}
+            {/* // region + relative time meta line */}
             <Text
               style={[styles.metaText, { color: theme.icon }]}
               numberOfLines={1}
@@ -121,7 +119,7 @@ export default function PostCard({
           </View>
         </View>
 
-        {/* //NO CHANGES : Follow still coming soon */}
+        {/* // Follow still coming soon */}
         <TouchableOpacity
           style={[styles.followButton, { backgroundColor: theme.primary }]}
           activeOpacity={0.8}
@@ -134,12 +132,10 @@ export default function PostCard({
         </TouchableOpacity>
       </View>
 
-      {/* //NO CHANGES */}
       <Text style={[styles.content, { color: theme.text }]} numberOfLines={4}>
         {post.content}
       </Text>
 
-      {/* //NO CHANGES */}
       {post.imageUrls.length > 0 && (
         <View style={styles.imagesRow}>
           {post.imageUrls.slice(0, 3).map((url, idx) => (
@@ -156,7 +152,6 @@ export default function PostCard({
         </View>
       )}
 
-      {/* //NO CHANGES */}
       {post.tags.length > 0 && (
         <View style={styles.tagsRow}>
           {post.tags.map((tag) => (
@@ -179,7 +174,7 @@ export default function PostCard({
       )}
 
       <View style={styles.footerRow}>
-        {/* //NO CHANGES : like still wired to backend */}
+        {/* // like still wired to backend */}
         <TouchableOpacity
           style={styles.footerAction}
           activeOpacity={0.7}
@@ -263,7 +258,7 @@ const styles = StyleSheet.create({
     marginLeft: scale(8),
     flex: 1,
   },
-  // //NEW ADDITION : horizontal row so name + score sit on one line
+  // //horizontal row so name + score sit on one line
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -275,7 +270,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     flexShrink: 1,
   },
-  // //NEW ADDITION : small star + score badge (subtle, not heavy)
+  // //small star + score badge (subtle, not heavy)
   reputationBadge: {
     flexDirection: "row",
     alignItems: "center",

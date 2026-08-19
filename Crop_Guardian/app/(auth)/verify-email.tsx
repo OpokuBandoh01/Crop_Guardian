@@ -134,8 +134,7 @@ export default function VerifyEmailScreen() {
               name="chatbox-ellipses-outline"
               size={moderateScale(32)}
               color={theme.primary}
-            />{" "}
-            {/* UPDATED - icon changed from mail to message/SMS */}
+            />
           </View>
         </View>
 
@@ -148,7 +147,7 @@ export default function VerifyEmailScreen() {
           {/* UPDATED - shows the phone number, was generic email text */}
         </Text>
 
-        {/* : inline error banner */}
+        {/* : inline error bzanner */}
         {errorMessage ? (
           <View style={styles.errorBanner}>
             <Text style={styles.errorText}>{errorMessage}</Text>
@@ -168,9 +167,9 @@ export default function VerifyEmailScreen() {
           {/* UPDATED - wired to state, disabled while busy */}
           <CustomButton
             title="Continue"
-            onPress={handleVerify} // UPDATED - was inline router.push, now calls verifyResetOtp first
-            loading={isVerifying} //
-            disabled={isBusy} //  - disabled during verify AND resend
+            onPress={handleVerify}
+            loading={isVerifying}
+            disabled={isBusy}
           />
         </View>
 

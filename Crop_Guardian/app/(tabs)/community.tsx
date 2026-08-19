@@ -1,385 +1,471 @@
-// components/community/PostCard.tsx
+// app/(tabs)/community.tsx
+// Community feed screen. Latest tab is wired. Save + follow wired via PostCard.
 
+import CategoriesRow from "@/components/community/CategoriesRow";
+import CommentsModal from "@/components/community/CommentsModal";
+import PostCard from "@/components/community/PostCard";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useAuthStore } from "@/stores/authStore";
+import { useCommunityStore } from "@/stores/communityStore";
+import { useNotificationStore } from "@/stores/notificationStore";
 import type { CommunityPost } from "@/types/community";
-import { formatRelativeTime } from "@/utils/timeFormat";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-interface PostCardProps {
-  post: CommunityPost;
-  currentUserId?: string | null;
-  onLikePress: (postId: string) => void;
-  onSavePress: (postId: string) => void;
-  onFollowPress: (userId: string) => void;
-  onCommentPress: (post: CommunityPost) => void;
-  isLiking: boolean;
-  isSaving: boolean;
-  isFollowLoading: boolean;
-  isFollowing: boolean;
-}
+type ComingSoonTab = "Following" | "Popular";
 
-function stopBubble(e: { stopPropagation: () => void }) {
-  e.stopPropagation();
-}
-
-export default function PostCard({
-  post,
-  currentUserId,
-  onLikePress,
-  onSavePress,
-  onFollowPress,
-  onCommentPress,
-  isLiking,
-  isSaving,
-  isFollowLoading,
-  isFollowing,
-}: PostCardProps) {
+export default function CommunityScreen() {
+  const router = useRouter();
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
 
-  const isOwnPost = Boolean(currentUserId && post.author.id === currentUserId);
+  const unreadCount = useNotificationStore((state) => state.unreadCount);
+  const fetchNotifications = useNotificationStore(
+    (state) => state.fetchNotifications,
+  );
 
-  const initials = post.author.fullName
-    .split(" ")
-    .map((part) => part.charAt(0))
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+  // NEW ADDITION: current user id so PostCard can hide Follow on own posts
+  const currentUserId = useAuthStore((state) => state.user?.id);
+
+  const {
+    tags,
+    posts,
+    postsLoading,
+    refreshing,
+    loadingMore,
+    postsError,
+    selectedTagSlug,
+    searchQuery,
+    likingPostIds,
+    // NEW ADDITION
+    savingPostIds,
+    followingUserIds,
+    followLoadingUserIds,
+    fetchTags,
+    fetchPosts,
+    refreshPosts,
+    loadMorePosts,
+    setSelectedTag,
+    setSearchQuery,
+    submitSearch,
+    toggleLike,
+    // NEW ADDITION
+    toggleSave,
+    toggleFollow,
+  } = useCommunityStore();
+
+  const [commentsPost, setCommentsPost] = useState<CommunityPost | null>(null);
+
+  const isBusy = postsLoading || refreshing || loadingMore;
+
+  useEffect(() => {
+    fetchTags();
+    fetchPosts({ reset: true });
+    fetchNotifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const hasFocusedOnce = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasFocusedOnce.current) {
+        hasFocusedOnce.current = true;
+        return;
+      }
+      refreshPosts();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
+
+  const handleComingSoonTab = (tab: ComingSoonTab) => {
+    Alert.alert(
+      "Coming soon",
+      `The ${tab} feed will be available in a future update.`,
+    );
+  };
+
+  const handleComposePress = () => {
+    router.push("/create-post");
+  };
+
+  const handleCommentAdded = () => {
+    refreshPosts();
+  };
+
+  // UPDATED: pass save + follow props into PostCard
+  const renderItem = ({ item }: { item: CommunityPost }) => (
+    <PostCard
+      post={item}
+      currentUserId={currentUserId}
+      onLikePress={toggleLike}
+      onSavePress={toggleSave}
+      onFollowPress={toggleFollow}
+      onCommentPress={setCommentsPost}
+      isLiking={Boolean(likingPostIds[item.id])}
+      isSaving={Boolean(savingPostIds[item.id])}
+      isFollowLoading={Boolean(followLoadingUserIds[item.author.id])}
+      isFollowing={
+        followingUserIds[item.author.id] ?? item.author.isFollowing ?? false
+      }
+    />
+  );
 
   return (
-    <TouchableOpacity
-      style={[
-        styles.card,
-        { backgroundColor: theme.surface, borderColor: theme.inputBorder },
-      ]}
-      activeOpacity={0.85}
-      onPress={() => onCommentPress(post)}
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.background }]}
+      edges={["top", "left", "right"]}
     >
-      {/* Header: avatar + name + reputation + meta + Follow */}
-      <View style={styles.headerRow}>
-        <View style={styles.headerLeft}>
-          {post.author.avatarUrl ? (
-            <Image
-              source={{ uri: post.author.avatarUrl }}
-              style={styles.avatar}
-            />
-          ) : (
-            <View
-              style={[
-                styles.avatarPlaceholder,
-                { backgroundColor: theme.primary },
-              ]}
-            >
-              <Text style={styles.avatarInitials}>{initials || "?"}</Text>
-            </View>
-          )}
-
-          <View style={styles.headerTextBlock}>
-            <View style={styles.nameRow}>
-              <Text
-                style={[styles.authorName, { color: theme.text }]}
-                numberOfLines={1}
-              >
-                {post.author.fullName}
+      <FlatList
+        data={posts}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={refreshPosts}
+            tintColor={theme.primary}
+            progressBackgroundColor={theme.surface}
+          />
+        }
+        onEndReachedThreshold={0.4}
+        onEndReached={loadMorePosts}
+        ListHeaderComponent={
+          <View>
+            <View style={styles.headerRow}>
+              <Text style={[styles.headerTitle, { color: theme.primary }]}>
+                Community
               </Text>
-              <View style={styles.reputationBadge}>
+              <TouchableOpacity
+                style={styles.bellButton}
+                onPress={() => router.push("/alerts")}
+                activeOpacity={0.7}
+              >
                 <Ionicons
-                  name="star"
-                  size={moderateScale(11)}
-                  color="#F59E0B"
+                  name="notifications-outline"
+                  size={moderateScale(22)}
+                  color={theme.primary}
                 />
-                <Text style={styles.reputationText}>
-                  {post.author.reputationScore ?? 0}
+                {unreadCount > 0 && (
+                  <View
+                    style={[styles.badge, { borderColor: theme.background }]}
+                  >
+                    <Text style={styles.badgeText}>
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.searchRow}>
+              <View
+                style={[
+                  styles.searchInputWrapper,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.inputBorder,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="search-outline"
+                  size={moderateScale(16)}
+                  color={theme.icon}
+                  style={styles.searchIcon}
+                />
+                <TextInput
+                  style={[styles.searchInput, { color: theme.text }]}
+                  placeholder="Search posts, crops or tags..."
+                  placeholderTextColor={theme.placeholder}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onSubmitEditing={submitSearch}
+                  returnKeyType="search"
+                  editable={!isBusy}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.filterButton,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.inputBorder,
+                  },
+                ]}
+                activeOpacity={0.7}
+                disabled={isBusy}
+                onPress={() =>
+                  Alert.alert(
+                    "Coming soon",
+                    "Advanced filters will be available in a future update.",
+                  )
+                }
+              >
+                <Ionicons
+                  name="options-outline"
+                  size={moderateScale(18)}
+                  color={theme.primary}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.sectionLabel, { color: theme.text }]}>
+              Categories
+            </Text>
+            <CategoriesRow
+              tags={tags}
+              selectedSlug={selectedTagSlug}
+              onSelect={setSelectedTag}
+              disabled={isBusy}
+            />
+
+            <View style={styles.tabsRow}>
+              <TouchableOpacity style={styles.tabItem} disabled={isBusy}>
+                <Text style={[styles.tabTextActive, { color: theme.primary }]}>
+                  Latest
+                </Text>
+                <View
+                  style={[
+                    styles.tabUnderline,
+                    { backgroundColor: theme.primary },
+                  ]}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.tabItem}
+                disabled={isBusy}
+                onPress={() => handleComingSoonTab("Following")}
+              >
+                <Text style={[styles.tabTextInactive, { color: theme.icon }]}>
+                  Following
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.tabItem}
+                disabled={isBusy}
+                onPress={() => handleComingSoonTab("Popular")}
+              >
+                <Text style={[styles.tabTextInactive, { color: theme.icon }]}>
+                  Popular
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {postsLoading && posts.length === 0 && (
+              <ActivityIndicator
+                size="large"
+                color={theme.primary}
+                style={styles.centerSpinner}
+              />
+            )}
+
+            {postsError && posts.length === 0 && !postsLoading && (
+              <View style={styles.errorBox}>
+                <Text style={[styles.errorText, { color: theme.text }]}>
+                  {postsError}
                 </Text>
               </View>
-            </View>
-            <Text
-              style={[styles.metaText, { color: theme.icon }]}
-              numberOfLines={1}
-            >
-              {post.region ? `${post.region} Region` : "Location not set"}
-              {"  \u00B7  "}
-              {formatRelativeTime(post.createdAt)}
-            </Text>
+            )}
           </View>
-        </View>
-
-        {!isOwnPost &&
-          (isFollowing ? (
-            <TouchableOpacity
-              activeOpacity={0.7}
-              disabled={isFollowLoading}
-              onPress={(e) => {
-                stopBubble(e);
-                onFollowPress(post.author.id);
-              }}
-            >
-              <Text style={[styles.followingText, { color: theme.icon }]}>
-                Following
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[
-                styles.followButton,
-                {
-                  backgroundColor: theme.primary,
-                  opacity: isFollowLoading ? 0.6 : 1,
-                },
-              ]}
-              activeOpacity={0.8}
-              disabled={isFollowLoading}
-              onPress={(e) => {
-                stopBubble(e);
-                onFollowPress(post.author.id);
-              }}
-            >
-              <Text style={styles.followButtonText}>Follow</Text>
-            </TouchableOpacity>
-          ))}
-      </View>
-
-      {/* Post body */}
-      <Text style={[styles.content, { color: theme.text }]} numberOfLines={4}>
-        {post.content}
-      </Text>
-
-      {/* Images (up to 3) */}
-      {post.imageUrls.length > 0 && (
-        <View style={styles.imagesRow}>
-          {post.imageUrls.slice(0, 3).map((url, idx) => (
-            <Image
-              key={`${post.id}-img-${idx}`}
-              source={{ uri: url }}
-              style={[
-                styles.postImage,
-                post.imageUrls.length === 1 && styles.postImageSingle,
-              ]}
-              resizeMode="cover"
-            />
-          ))}
-        </View>
-      )}
-
-      {/* Tags */}
-      {post.tags.length > 0 && (
-        <View style={styles.tagsRow}>
-          {post.tags.map((tag) => (
-            <View
-              key={tag.id}
-              style={[
-                styles.tagChip,
-                {
-                  backgroundColor:
-                    colorScheme === "light" ? "#EBF7E9" : "#1E2C20",
-                },
-              ]}
-            >
-              <Text style={[styles.tagChipText, { color: theme.primary }]}>
-                #{tag.name.replace(/\s+/g, "")}
+        }
+        ListEmptyComponent={
+          !postsLoading && !postsError ? (
+            <View style={styles.emptyBox}>
+              <Ionicons
+                name="chatbubbles-outline"
+                size={moderateScale(36)}
+                color={theme.icon}
+              />
+              <Text style={[styles.emptyText, { color: theme.icon }]}>
+                No posts found. Be the first to share your experience!
               </Text>
             </View>
-          ))}
-        </View>
-      )}
+          ) : null
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <ActivityIndicator
+              size="small"
+              color={theme.primary}
+              style={styles.footerSpinner}
+            />
+          ) : null
+        }
+      />
 
-      {/* Footer: like, comment, save */}
-      <View style={styles.footerRow}>
-        <TouchableOpacity
-          style={styles.footerAction}
-          activeOpacity={0.7}
-          disabled={isLiking}
-          onPress={(e) => {
-            stopBubble(e);
-            onLikePress(post.id);
-          }}
-        >
-          <Ionicons
-            name={post.isLiked ? "heart" : "heart-outline"}
-            size={moderateScale(18)}
-            color={post.isLiked ? "#EF4444" : theme.icon}
-          />
-          <Text style={[styles.footerActionText, { color: theme.icon }]}>
-            {post.likesCount}
-          </Text>
-        </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.composeButton, { backgroundColor: theme.primary }]}
+        activeOpacity={0.85}
+        onPress={handleComposePress}
+      >
+        <Ionicons name="add" size={moderateScale(26)} color="#FFFFFF" />
+      </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.footerAction}
-          activeOpacity={0.7}
-          onPress={(e) => {
-            stopBubble(e);
-            onCommentPress(post);
-          }}
-        >
-          <Ionicons
-            name="chatbubble-outline"
-            size={moderateScale(16)}
-            color={theme.icon}
-          />
-          <Text style={[styles.footerActionText, { color: theme.icon }]}>
-            {post.commentsCount}
-          </Text>
-        </TouchableOpacity>
-
-        {/*  bookmark + savesCount */}
-        <TouchableOpacity
-          style={styles.footerAction}
-          activeOpacity={0.7}
-          disabled={isSaving}
-          onPress={(e) => {
-            stopBubble(e);
-            onSavePress(post.id);
-          }}
-        >
-          <Ionicons
-            name={post.isSaved ? "bookmark" : "bookmark-outline"}
-            size={moderateScale(17)}
-            color={post.isSaved ? theme.primary : theme.icon}
-          />
-          <Text style={[styles.footerActionText, { color: theme.icon }]}>
-            {post.savesCount}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+      <CommentsModal
+        visible={commentsPost !== null}
+        post={commentsPost}
+        onClose={() => setCommentsPost(null)}
+        onCommentAdded={handleCommentAdded}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: moderateScale(14),
-    borderWidth: 1,
-    padding: scale(12),
-    marginBottom: verticalScale(14),
+  safeArea: {
+    flex: 1,
+  },
+  listContent: {
+    paddingHorizontal: scale(16),
+    paddingTop: verticalScale(8),
+    paddingBottom: verticalScale(110),
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: verticalScale(8),
+    alignItems: "center",
+    marginBottom: verticalScale(14),
   },
-  headerLeft: {
+  headerTitle: {
+    fontSize: moderateScale(22),
+    fontWeight: "700",
+  },
+  bellButton: {
+    padding: scale(6),
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: "#EF4444",
+    borderRadius: moderateScale(10),
+    minWidth: moderateScale(18),
+    height: moderateScale(18),
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+  },
+  badgeText: {
+    color: "#FFFFFF",
+    fontSize: moderateScale(10),
+    fontWeight: "700",
+  },
+  searchRow: {
+    flexDirection: "row",
+    gap: scale(8),
+    marginBottom: verticalScale(16),
+  },
+  searchInputWrapper: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
+    borderWidth: 1,
+    borderRadius: moderateScale(12),
+    paddingHorizontal: scale(10),
+  },
+  searchIcon: {
+    marginRight: scale(6),
+  },
+  searchInput: {
     flex: 1,
-    marginRight: scale(8),
+    fontSize: moderateScale(12.5),
+    paddingVertical: verticalScale(10),
   },
-  avatar: {
-    width: moderateScale(36),
-    height: moderateScale(36),
-    borderRadius: moderateScale(18),
-  },
-  avatarPlaceholder: {
-    width: moderateScale(36),
-    height: moderateScale(36),
-    borderRadius: moderateScale(18),
+  filterButton: {
+    width: moderateScale(42),
+    borderRadius: moderateScale(12),
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarInitials: {
-    color: "#FFFFFF",
+  sectionLabel: {
+    fontSize: moderateScale(14),
+    fontWeight: "700",
+    marginBottom: verticalScale(10),
+  },
+  tabsRow: {
+    flexDirection: "row",
+    gap: scale(20),
+    marginTop: verticalScale(16),
+    marginBottom: verticalScale(14),
+  },
+  tabItem: {
+    alignItems: "center",
+  },
+  tabTextActive: {
     fontSize: moderateScale(13),
     fontWeight: "700",
+    paddingBottom: verticalScale(4),
   },
-  headerTextBlock: {
-    marginLeft: scale(8),
-    flex: 1,
-  },
-  nameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: scale(6),
-    flexShrink: 1,
-  },
-  authorName: {
-    fontSize: moderateScale(13.5),
-    fontWeight: "700",
-    flexShrink: 1,
-  },
-  reputationBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: scale(2),
-    paddingHorizontal: scale(5),
-    paddingVertical: verticalScale(1),
-    borderRadius: moderateScale(8),
-    backgroundColor: "rgba(245, 158, 11, 0.12)",
-  },
-  reputationText: {
-    fontSize: moderateScale(10.5),
-    fontWeight: "700",
-    color: "#D97706",
-  },
-  metaText: {
-    fontSize: moderateScale(10.5),
-    marginTop: verticalScale(1),
-  },
-  followButton: {
-    paddingHorizontal: scale(14),
-    paddingVertical: verticalScale(6),
-    borderRadius: moderateScale(16),
-  },
-  followButtonText: {
-    color: "#FFFFFF",
-    fontSize: moderateScale(11),
-    fontWeight: "700",
-  },
-  //  Following = text only, no green background / border
-  followingText: {
-    fontSize: moderateScale(12),
+  tabTextInactive: {
+    fontSize: moderateScale(13),
     fontWeight: "600",
-    paddingHorizontal: scale(6),
-    paddingVertical: verticalScale(6),
+    paddingBottom: verticalScale(4),
   },
-  content: {
+  tabUnderline: {
+    height: 2,
+    width: "100%",
+    borderRadius: 1,
+  },
+  centerSpinner: {
+    marginTop: verticalScale(30),
+  },
+  errorBox: {
+    alignItems: "center",
+    marginTop: verticalScale(30),
+    paddingHorizontal: scale(20),
+  },
+  errorText: {
     fontSize: moderateScale(12.5),
-    lineHeight: verticalScale(18),
-    marginBottom: verticalScale(10),
+    textAlign: "center",
   },
-  imagesRow: {
-    flexDirection: "row",
-    gap: scale(6),
-    marginBottom: verticalScale(10),
-  },
-  postImage: {
-    flex: 1,
-    height: verticalScale(80),
-    borderRadius: moderateScale(8),
-  },
-  postImageSingle: {
-    height: verticalScale(140),
-  },
-  tagsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: scale(6),
-    marginBottom: verticalScale(10),
-  },
-  tagChip: {
-    paddingHorizontal: scale(8),
-    paddingVertical: verticalScale(3),
-    borderRadius: moderateScale(10),
-  },
-  tagChipText: {
-    fontSize: moderateScale(10),
-    fontWeight: "600",
-  },
-  footerRow: {
-    flexDirection: "row",
-    gap: scale(18),
-  },
-  footerAction: {
-    flexDirection: "row",
+  emptyBox: {
     alignItems: "center",
-    gap: scale(4),
+    marginTop: verticalScale(50),
+    paddingHorizontal: scale(30),
+    gap: verticalScale(10),
   },
-  footerActionText: {
-    fontSize: moderateScale(11.5),
-    fontWeight: "600",
+  emptyText: {
+    fontSize: moderateScale(12.5),
+    textAlign: "center",
+  },
+  footerSpinner: {
+    marginVertical: verticalScale(16),
+  },
+  composeButton: {
+    position: "absolute",
+    right: scale(16),
+    bottom: verticalScale(90),
+    width: moderateScale(52),
+    height: moderateScale(52),
+    borderRadius: moderateScale(26),
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });

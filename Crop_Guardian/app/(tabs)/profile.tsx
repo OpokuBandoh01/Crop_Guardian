@@ -106,8 +106,6 @@ export default function ProfileScreen() {
         style={styles.rowContainer}
         onPress={onPress}
         activeOpacity={0.7}
-        // NEW ADDITION: every row is disabled while a logout is in flight,
-        // per the "disable all clickables while loading" rule.
         disabled={!onPress || isLoggingOut}
       >
         {iconConfig ? (
@@ -188,8 +186,6 @@ export default function ProfileScreen() {
       >
         <View style={styles.profileCard}>
           <View style={styles.profileTopSection}>
-            {/* UPDATED: was a plain Image + hardcoded onPress console.log,
-                now a fully working upload flow via AvatarPicker. */}
             <View style={{ marginRight: scale(12) }}>
               <AvatarPicker
                 avatarUrl={user?.profile?.avatarUrl}
@@ -250,8 +246,6 @@ export default function ProfileScreen() {
 
           <View style={styles.cardDivider} />
 
-          {/* UPDATED: was four hardcoded numbers, now the reusable
-              StatsRow bound to the real stats object from /me. */}
           <StatsRow stats={stats} loading={loading} />
         </View>
 
@@ -294,7 +288,7 @@ export default function ProfileScreen() {
             false,
             () => handlePress("Offline Database"),
           )}
-          <View style={styles.rowDivider} />;
+          <View style={styles.rowDivider} />
           {renderRow(
             "Saved Posts",
             "Posts you bookmarked from the community",

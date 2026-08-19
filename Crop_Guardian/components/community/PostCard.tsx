@@ -6,14 +6,7 @@ import type { CommunityPost } from "@/types/community";
 import { formatRelativeTime } from "@/utils/timeFormat";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import {
-  Alert,
-  Image,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
 interface PostCardProps {
@@ -35,22 +28,20 @@ function stopBubble(e: { stopPropagation: () => void }) {
 
 export default function PostCard({
   post,
-  onLikePress,
-  isLiking,
-  onCommentPress,
   currentUserId,
+  onLikePress,
+  onSavePress,
+  onFollowPress,
+  onCommentPress,
+  isLiking,
+  isSaving,
+  isFollowLoading,
+  isFollowing,
 }: PostCardProps) {
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
 
   const isOwnPost = Boolean(currentUserId && post.author.id === currentUserId);
-
-  const showComingSoon = (feature: string) => {
-    Alert.alert(
-      "Coming soon",
-      `${feature} will be available in a future update.`,
-    );
-  };
 
   const initials = post.author.fullName
     .split(" ")
@@ -68,6 +59,7 @@ export default function PostCard({
       activeOpacity={0.85}
       onPress={() => onCommentPress(post)}
     >
+      {/* Header: avatar + name + reputation + meta + Follow */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           {post.author.avatarUrl ? (
@@ -87,7 +79,6 @@ export default function PostCard({
           )}
 
           <View style={styles.headerTextBlock}>
-            {/* //UPDATED : name row now includes reputation score beside the name */}
             <View style={styles.nameRow}>
               <Text
                 style={[styles.authorName, { color: theme.text }]}
@@ -95,7 +86,6 @@ export default function PostCard({
               >
                 {post.author.fullName}
               </Text>
-              {/* //subtle reputation badge (star + score) for social proof */}
               <View style={styles.reputationBadge}>
                 <Ionicons
                   name="star"
@@ -107,7 +97,6 @@ export default function PostCard({
                 </Text>
               </View>
             </View>
-            {/* // region + relative time meta line */}
             <Text
               style={[styles.metaText, { color: theme.icon }]}
               numberOfLines={1}
@@ -119,23 +108,48 @@ export default function PostCard({
           </View>
         </View>
 
-        {/* // Follow still coming soon */}
-        <TouchableOpacity
-          style={[styles.followButton, { backgroundColor: theme.primary }]}
-          activeOpacity={0.8}
-          onPress={(e) => {
-            stopBubble(e);
-            showComingSoon("Following farmers");
-          }}
-        >
-          <Text style={styles.followButtonText}>Follow</Text>
-        </TouchableOpacity>
+        {/*  Follow (green) / Following (text only) / hidden on own posts */}
+        {!isOwnPost &&
+          (isFollowing ? (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              disabled={isFollowLoading}
+              onPress={(e) => {
+                stopBubble(e);
+                onFollowPress(post.author.id);
+              }}
+            >
+              <Text style={[styles.followingText, { color: theme.icon }]}>
+                Following
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.followButton,
+                {
+                  backgroundColor: theme.primary,
+                  opacity: isFollowLoading ? 0.6 : 1,
+                },
+              ]}
+              activeOpacity={0.8}
+              disabled={isFollowLoading}
+              onPress={(e) => {
+                stopBubble(e);
+                onFollowPress(post.author.id);
+              }}
+            >
+              <Text style={styles.followButtonText}>Follow</Text>
+            </TouchableOpacity>
+          ))}
       </View>
 
+      {/* Post body */}
       <Text style={[styles.content, { color: theme.text }]} numberOfLines={4}>
         {post.content}
       </Text>
 
+      {/* Images (up to 3) */}
       {post.imageUrls.length > 0 && (
         <View style={styles.imagesRow}>
           {post.imageUrls.slice(0, 3).map((url, idx) => (
@@ -152,6 +166,7 @@ export default function PostCard({
         </View>
       )}
 
+      {/* Tags */}
       {post.tags.length > 0 && (
         <View style={styles.tagsRow}>
           {post.tags.map((tag) => (
@@ -173,8 +188,8 @@ export default function PostCard({
         </View>
       )}
 
+      {/* Footer: like, comment, save */}
       <View style={styles.footerRow}>
-        {/* // like still wired to backend */}
         <TouchableOpacity
           style={styles.footerAction}
           activeOpacity={0.7}
@@ -194,7 +209,6 @@ export default function PostCard({
           </Text>
         </TouchableOpacity>
 
-        {/* //UPDATED : open Comments modal instead of Coming soon Alert */}
         <TouchableOpacity
           style={styles.footerAction}
           activeOpacity={0.7}
@@ -212,12 +226,31 @@ export default function PostCard({
             {post.commentsCount}
           </Text>
         </TouchableOpacity>
+
+        {/*  bookmark + savesCount */}
+        <TouchableOpacity
+          style={styles.footerAction}
+          activeOpacity={0.7}
+          disabled={isSaving}
+          onPress={(e) => {
+            stopBubble(e);
+            onSavePress(post.id);
+          }}
+        >
+          <Ionicons
+            name={post.isSaved ? "bookmark" : "bookmark-outline"}
+            size={moderateScale(17)}
+            color={post.isSaved ? theme.primary : theme.icon}
+          />
+          <Text style={[styles.footerActionText, { color: theme.icon }]}>
+            {post.savesCount}
+          </Text>
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 }
 
-// //UPDATED : added nameRow + reputationBadge styles; everything else unchanged
 const styles = StyleSheet.create({
   card: {
     borderRadius: moderateScale(14),
@@ -258,7 +291,6 @@ const styles = StyleSheet.create({
     marginLeft: scale(8),
     flex: 1,
   },
-  // //horizontal row so name + score sit on one line
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -270,7 +302,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     flexShrink: 1,
   },
-  // //small star + score badge (subtle, not heavy)
   reputationBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -298,6 +329,13 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: moderateScale(11),
     fontWeight: "700",
+  },
+  // NEW ADDITION: Following = text only, no green background / border
+  followingText: {
+    fontSize: moderateScale(12),
+    fontWeight: "600",
+    paddingHorizontal: scale(6),
+    paddingVertical: verticalScale(6),
   },
   content: {
     fontSize: moderateScale(12.5),

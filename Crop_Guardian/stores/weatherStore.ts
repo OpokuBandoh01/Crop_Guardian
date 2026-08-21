@@ -44,7 +44,7 @@ export interface WeatherApiData {
   location: { latitude: number; longitude: number };
   current: BackendCurrent;
   daily: DailyData;
-  riskInsights: RiskInsight[];
+  riskInsights?: RiskInsight[];
   overallSummary: string;
 }
 

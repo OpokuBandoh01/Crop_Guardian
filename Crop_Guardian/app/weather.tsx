@@ -1,21 +1,8 @@
 // app/weather.tsx
-// //UPDATED : full UI redesign to match the Weather product screenshot
-//            (hero with field background, 3 metric chips, crop advice card,
-//            hourly strip, vertical 7-day list).
-// //NO CHANGES : weather store, 15-min cache, permission flow, PDF export
-//                logic, pull-to-refresh, disable-while-loading rules.
-//
-// Data notes (important for your report / viva):
-// - Backend currently returns current + daily only (no hourly, no wind).
-// - Rain chance uses today daily.precipitation_probability_max[0].
-// - Wind chip shows "—" until backend adds wind_speed_10m.
-// - Hourly strip is a light visual approximation from current + daily
-//   min/max so the layout matches the design. Replace with real hourly
-//   when the backend Open-Meteo request includes hourly params.
 
 import { Ionicons } from "@expo/vector-icons";
 import * as Print from "expo-print";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -34,6 +21,7 @@ import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useSubscriptionStore } from "@/stores/subscriptionStore";
 import { useWeatherStore } from "@/stores/weatherStore";
 import { getWeatherIcon } from "@/utils/utilities";
 
@@ -86,6 +74,10 @@ export default function WeatherPage() {
   const permissionDenied = useWeatherStore((state) => state.permissionDenied);
   const fetchWeather = useWeatherStore((state) => state.fetchWeather);
 
+  // NEW ADDITION: subscription status (paid unlocks crop risk insights)
+  const { status, fetchStatus } = useSubscriptionStore();
+  const isPaid = Boolean(status?.isPaid || status?.hasCropInsights);
+
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [exportingPdf, setExportingPdf] = useState<boolean>(false);
 
@@ -96,16 +88,26 @@ export default function WeatherPage() {
     fetchWeather();
   }, [fetchWeather]);
 
+  // NEW ADDITION: refresh plan status when weather screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      fetchStatus();
+    }, [fetchStatus]),
+  );
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchWeather({ force: true });
+    // UPDATED: also refresh subscription status on pull-to-refresh
+    await Promise.all([fetchWeather({ force: true }), fetchStatus()]);
     setRefreshing(false);
-  }, [fetchWeather]);
+  }, [fetchWeather, fetchStatus]);
 
-  // //NO CHANGES : PDF HTML builder (same data, same secure messages)
+  // UPDATED: PDF builder safely handles missing riskInsights (free plan)
   const buildReportHtml = () => {
     if (!weatherData) return "";
-    const { current, daily, riskInsights, overallSummary } = weatherData;
+    const { current, daily, overallSummary } = weatherData;
+    // NEW ADDITION: optional chaining — free responses may omit riskInsights
+    const riskInsights = weatherData.riskInsights ?? [];
 
     const dailyRows = daily.time
       .map((date, index) => {
@@ -129,9 +131,11 @@ export default function WeatherPage() {
       })
       .join("");
 
-    const riskBlocks = riskInsights
-      .map(
-        (insight) => `
+    const riskBlocks =
+      riskInsights.length > 0
+        ? riskInsights
+            .map(
+              (insight) => `
           <div class="risk-card">
             <div class="risk-header">
               <span class="risk-crop">${insight.crop}</span>
@@ -144,8 +148,9 @@ export default function WeatherPage() {
                 : ""
             }
           </div>`,
-      )
-      .join("");
+            )
+            .join("")
+        : `<p class="summary-card">Crop risk insights are available with Farmer Monthly.</p>`;
 
     return `
       <html>
@@ -283,8 +288,11 @@ export default function WeatherPage() {
     });
   }, [weatherData]);
 
+  // NEW ADDITION: safe list — free plan may omit riskInsights entirely
+  const riskInsights = weatherData?.riskInsights ?? [];
+  const hasCropInsights = riskInsights.length > 0;
   // Primary crop advice card (first risk insight, matches screenshot focus)
-  const primaryAdvice = weatherData?.riskInsights?.[0] ?? null;
+  const primaryAdvice = hasCropInsights ? riskInsights[0] : null;
 
   // ================= PERMISSION DENIED =================
   // //NO CHANGES : same permission empty state behaviour
@@ -567,8 +575,8 @@ export default function WeatherPage() {
               </View>
             </View>
 
-            {/* ================= WEATHER ADVICE CARD ================= */}
-            {/* //UPDATED : dark green advice card like screenshot */}
+            {/* ================= WEATHER ADVICE CARD (paid) ================= */}
+            {/* //UPDATED : only when riskInsights are present */}
             {primaryAdvice && (
               <View style={styles.adviceCard}>
                 <View style={styles.adviceTop}>
@@ -595,6 +603,64 @@ export default function WeatherPage() {
                 )}
               </View>
             )}
+
+            {/* NEW ADDITION: free plan upgrade card (forecast still fully visible) */}
+            {!hasCropInsights && (
+              <TouchableOpacity
+                style={styles.upgradeCard}
+                activeOpacity={0.88}
+                disabled={isBusy}
+                onPress={() => router.push("/upgrade")}
+              >
+                <View style={styles.upgradeTop}>
+                  <View style={styles.upgradeIconWrap}>
+                    <Ionicons
+                      name="leaf"
+                      size={moderateScale(18)}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                  <Text style={styles.upgradeTitle}>
+                    Unlock crop risk insights
+                  </Text>
+                </View>
+                <Text style={styles.upgradeBody}>
+                  Farmer Monthly adds disease risk guidance for your crops based
+                  on local weather. Forecast above stays free for everyone.
+                </Text>
+                <View style={styles.upgradeCtaRow}>
+                  <Text style={styles.upgradeCta}>Subscribe · GHS 50</Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={moderateScale(16)}
+                    color="#A7F3D0"
+                  />
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* Optional overall summary for free users (weather-only from backend) */}
+            {!hasCropInsights && weatherData.overallSummary ? (
+              <View
+                style={[
+                  styles.summaryCard,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor:
+                      colorScheme === "light" ? "#E8EDE8" : theme.inputBorder,
+                  },
+                ]}
+              >
+                <Text style={[styles.summaryTitle, { color: theme.text }]}>
+                  Today&apos;s outlook
+                </Text>
+                <Text
+                  style={[styles.summaryBody, { color: theme.tabIconDefault }]}
+                >
+                  {weatherData.overallSummary}
+                </Text>
+              </View>
+            ) : null}
 
             {/* ================= HOURLY FORECAST ================= */}
             {/* //NEW ADDITION : horizontal hourly strip (approx until backend hourly) */}
@@ -751,8 +817,8 @@ export default function WeatherPage() {
               })}
             </View>
 
-            {/* ================= EXTRA CROP RISKS (if more than one) ================= */}
-            {weatherData.riskInsights.length > 1 && (
+            {/* ================= EXTRA CROP RISKS (paid, if more than one) ================= */}
+            {riskInsights.length > 1 && (
               <>
                 <Text
                   style={[
@@ -763,7 +829,7 @@ export default function WeatherPage() {
                   More Crop Insights
                 </Text>
                 <View style={styles.riskList}>
-                  {weatherData.riskInsights.slice(1).map((insight) => {
+                  {riskInsights.slice(1).map((insight) => {
                     const levelColor =
                       insight.riskLevel === "High"
                         ? "#EF4444"
@@ -986,7 +1052,7 @@ const styles = StyleSheet.create({
     marginTop: verticalScale(1),
   },
 
-  // Advice card
+  // Advice card (paid)
   adviceCard: {
     backgroundColor: "#0B3D0B",
     borderRadius: moderateScale(16),
@@ -1023,6 +1089,67 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.65)",
     fontSize: moderateScale(10.5),
     marginTop: verticalScale(6),
+  },
+
+  // NEW ADDITION: free upgrade card
+  upgradeCard: {
+    backgroundColor: "#0B3D0B",
+    borderRadius: moderateScale(16),
+    padding: scale(14),
+    marginBottom: verticalScale(12),
+  },
+  upgradeTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: verticalScale(8),
+    gap: scale(8),
+  },
+  upgradeIconWrap: {
+    width: moderateScale(30),
+    height: moderateScale(30),
+    borderRadius: moderateScale(15),
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  upgradeTitle: {
+    color: "#FFFFFF",
+    fontSize: moderateScale(14),
+    fontWeight: "700",
+    flex: 1,
+  },
+  upgradeBody: {
+    color: "rgba(255,255,255,0.88)",
+    fontSize: moderateScale(12),
+    lineHeight: moderateScale(17),
+    marginBottom: verticalScale(10),
+  },
+  upgradeCtaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  upgradeCta: {
+    color: "#A7F3D0",
+    fontSize: moderateScale(13),
+    fontWeight: "700",
+  },
+
+  // NEW ADDITION: weather-only summary for free users
+  summaryCard: {
+    borderRadius: moderateScale(14),
+    borderWidth: 1,
+    padding: scale(14),
+    marginBottom: verticalScale(14),
+  },
+  summaryTitle: {
+    fontSize: moderateScale(13),
+    fontWeight: "700",
+    marginBottom: verticalScale(4),
+  },
+  summaryBody: {
+    fontSize: moderateScale(12),
+    lineHeight: moderateScale(17),
   },
 
   // Section headers

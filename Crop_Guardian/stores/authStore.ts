@@ -6,6 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { useOnboardingStore } from "./onboardingStore";
+import { useSubscriptionStore } from "./subscriptionStore";
 
 interface User {
   id?: string;
@@ -60,6 +61,7 @@ export const useAuthStore = create<AuthStore>()(
         AsyncStorage.removeItem("userToken").catch(() => {});
         AsyncStorage.removeItem("userData").catch(() => {});
         useOnboardingStore.getState().resetOnboarding();
+        useSubscriptionStore.getState().reset();
         set({
           token: null,
           user: null,

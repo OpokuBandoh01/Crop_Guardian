@@ -1,15 +1,19 @@
 // app/scan.tsx
 
 import AnimatedScreen from "@/components/AnimatedScreen";
+import BlurModal from "@/components/BlurModal";
+import { CustomButton } from "@/components/CustomButton";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import API from "@/services/api";
+import { formatPlanEndDate } from "@/services/subscriptionApi";
+import { useSubscriptionStore } from "@/stores/subscriptionStore";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -106,17 +110,41 @@ export default function ScanScreen() {
   const theme = Colors[colorScheme];
 
   const [imageUri, setImageUri] = useState<string | null>(null);
-
   const [selectedCrop, setSelectedCrop] = useState<CropTypeEnum | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  // NEW ADDITION: subscription gate for free monthly scans
+  const { status, fetchStatus } = useSubscriptionStore();
+  const [limitModalVisible, setLimitModalVisible] = useState(false);
+
+  const isPaid = Boolean(status?.isPaid);
+  const remainingFreeScans = status?.remainingFreeScans ?? 0;
+  const scansBlocked = !isPaid && remainingFreeScans <= 0;
+
+  // NEW ADDITION: refresh plan status whenever scan screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      fetchStatus();
+    }, [fetchStatus]),
+  );
+
   useEffect(() => {
     if (action === "camera") {
-      takePhoto();
+      guardScanOrRun(takePhoto);
     } else if (action === "gallery") {
-      uploadImage();
+      guardScanOrRun(uploadImage);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action]);
+
+  // NEW ADDITION: if free quota is finished, show upgrade modal instead of running the action
+  const guardScanOrRun = (fn: () => void) => {
+    if (scansBlocked) {
+      setLimitModalVisible(true);
+      return;
+    }
+    fn();
+  };
 
   const takePhoto = async () => {
     try {
@@ -188,6 +216,13 @@ export default function ScanScreen() {
       );
       return;
     }
+
+    // NEW ADDITION: client-side free scan gate (backend still enforces)
+    if (scansBlocked) {
+      setLimitModalVisible(true);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const formData = new FormData();
@@ -207,6 +242,8 @@ export default function ScanScreen() {
       });
 
       if (response.data && response.data.success) {
+        // NEW ADDITION: refresh remaining free scans after a successful diagnosis
+        fetchStatus();
         router.push({
           pathname: "/result",
           params: { data: JSON.stringify(response.data) },
@@ -216,7 +253,10 @@ export default function ScanScreen() {
       }
     } catch (error: any) {
       console.error("Detect error:", error);
-      if (error.response?.data?.errorType === "CROP_MISMATCH") {
+      // NEW ADDITION: backend safety net when free quota is used up
+      if (error.response?.data?.errorType === "SCAN_LIMIT_REACHED") {
+        setLimitModalVisible(true);
+      } else if (error.response?.data?.errorType === "CROP_MISMATCH") {
         const errorMsg =
           error.response.data.message ||
           "The uploaded image does not match the selected crop.";
@@ -302,6 +342,17 @@ export default function ScanScreen() {
         <View style={styles.rightSpacer} />
       </AnimatedScreen>
 
+      {/* NEW ADDITION: free remaining scans or paid plan line */}
+      {!isPaid ? (
+        <Text style={[styles.planHint, { color: theme.text }]}>
+          {remainingFreeScans} of 5 free scans left this month
+        </Text>
+      ) : (
+        <Text style={[styles.planHintPaid, { color: theme.primary }]}>
+          Farmer plan active until {formatPlanEndDate(status?.endsAt)}
+        </Text>
+      )}
+
       {/* Image Container with Overlay */}
       <AnimatedScreen
         delay={80}
@@ -365,7 +416,7 @@ export default function ScanScreen() {
       <AnimatedScreen delay={160} style={styles.bottomControls}>
         <TouchableOpacity
           style={styles.iconButton}
-          onPress={uploadImage}
+          onPress={() => guardScanOrRun(uploadImage)}
           disabled={isLoading}
         >
           <Image
@@ -382,7 +433,15 @@ export default function ScanScreen() {
             (!imageUri || !selectedCrop || isLoading) &&
               styles.diagnoseButtonDisabled,
           ]}
-          onPress={imageUri && selectedCrop ? handleSubmit : takePhoto}
+          onPress={() =>
+            guardScanOrRun(() => {
+              if (imageUri && selectedCrop) {
+                handleSubmit();
+              } else {
+                takePhoto();
+              }
+            })
+          }
           disabled={isLoading}
         >
           {isLoading ? (
@@ -423,7 +482,7 @@ export default function ScanScreen() {
             styles.invertButton,
             { borderColor: theme.text },
           ]}
-          onPress={takePhoto}
+          onPress={() => guardScanOrRun(takePhoto)}
           disabled={isLoading}
         >
           <Image
@@ -433,6 +492,42 @@ export default function ScanScreen() {
           />
         </TouchableOpacity>
       </AnimatedScreen>
+
+      {/* NEW ADDITION: free scan limit modal (BlurModal locks background) */}
+      <BlurModal
+        visible={limitModalVisible}
+        onClose={() => {
+          if (!isLoading) setLimitModalVisible(false);
+        }}
+        closeOnBackdropPress={!isLoading}
+      >
+        <Text style={[styles.limitTitle, { color: theme.text }]}>
+          Free scans used for this month
+        </Text>
+        <Text
+          style={[
+            styles.limitBody,
+            { color: colorScheme === "light" ? "#4B5563" : "#9BA1A6" },
+          ]}
+        >
+          You have used your 5 free scans for this month. Subscribe to Farmer
+          Monthly for unlimited scans and crop weather insights.
+        </Text>
+        <CustomButton
+          title="Subscribe · GHS 50"
+          onPress={() => {
+            setLimitModalVisible(false);
+            router.push("/upgrade");
+          }}
+          disabled={isLoading}
+        />
+        <CustomButton
+          title="Not now"
+          variant="outline"
+          onPress={() => setLimitModalVisible(false)}
+          disabled={isLoading}
+        />
+      </BlurModal>
     </SafeAreaView>
   );
 }
@@ -445,11 +540,25 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: scale(16),
     paddingTop: verticalScale(16),
-    paddingBottom: verticalScale(16),
+    paddingBottom: verticalScale(8),
   },
   backButton: { padding: scale(4) },
   headerTitle: { fontSize: moderateScale(22), fontWeight: "700" },
   rightSpacer: { width: moderateScale(40) },
+
+  // NEW ADDITION: plan status lines under header
+  planHint: {
+    textAlign: "center",
+    fontSize: moderateScale(12),
+    marginBottom: verticalScale(8),
+    opacity: 0.85,
+  },
+  planHintPaid: {
+    textAlign: "center",
+    fontSize: moderateScale(12),
+    marginBottom: verticalScale(8),
+    fontWeight: "600",
+  },
 
   imageContainer: {
     width: width - scale(32),
@@ -468,7 +577,7 @@ const styles = StyleSheet.create({
 
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: "flex-start", // UPDATED: flex-start so scroll content starts at top
+    justifyContent: "flex-start",
     alignItems: "center",
     paddingTop: verticalScale(12),
     paddingHorizontal: scale(12),
@@ -480,7 +589,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // UPDATED: ScrollView wrapper fills remaining overlay space
   cropGridScroll: {
     width: "100%",
     flexGrow: 0,
@@ -493,7 +601,6 @@ const styles = StyleSheet.create({
     width: "100%",
     paddingBottom: verticalScale(8),
   },
-  // UPDATED: card width reduced slightly to fit more per row with 10 crops
   cropCard: {
     width: (width - scale(100)) / 3,
     paddingVertical: verticalScale(10),
@@ -515,7 +622,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Frame corners
   corner: {
     position: "absolute",
     width: moderateScale(40),
@@ -618,5 +724,19 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: verticalScale(16),
     opacity: 0.7,
+  },
+
+  // NEW ADDITION: limit modal text styles
+  limitTitle: {
+    fontSize: moderateScale(16),
+    fontWeight: "700",
+    marginBottom: verticalScale(8),
+    textAlign: "center",
+  },
+  limitBody: {
+    fontSize: moderateScale(13),
+    textAlign: "center",
+    marginBottom: verticalScale(16),
+    lineHeight: verticalScale(18),
   },
 });

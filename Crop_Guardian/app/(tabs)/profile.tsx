@@ -1,8 +1,8 @@
 // app/(tabs)/profile.tsx
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -21,7 +21,9 @@ import { StatsRow } from "@/components/profile/StatsRow";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { formatPlanEndDate } from "@/services/subscriptionApi";
 import { useAuthStore } from "@/stores/authStore";
+import { useSubscriptionStore } from "@/stores/subscriptionStore";
 import { useThemeStore } from "@/stores/themeStore";
 
 export default function ProfileScreen() {
@@ -36,6 +38,18 @@ export default function ProfileScreen() {
   const themePreference = useThemeStore((state) => state.themePreference);
 
   const { user, stats, loading, refreshing, refetch } = useUserProfile();
+  const { status, fetchStatus } = useSubscriptionStore();
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchStatus();
+    }, [fetchStatus]),
+  );
+
+  const isPaid = Boolean(status?.isPaid);
+  const planSubtitle = isPaid
+    ? `Farmer plan active until ${formatPlanEndDate(status?.endsAt)}`
+    : `${status?.remainingFreeScans ?? 0} of 5 free scans left this month`;
 
   const handlePress = (screen: string) => {
     if (screen === "Log Out") {
@@ -64,6 +78,8 @@ export default function ProfileScreen() {
       router.push("/rate-us");
     } else if (screen === "Saved Posts") {
       router.push("/saved-posts");
+    } else if (screen === "Subscription") {
+      router.push("/subscription");
     }
   };
 
@@ -260,6 +276,15 @@ export default function ProfileScreen() {
             undefined,
             false,
             () => handlePress("Personal Information"),
+          )}
+          <View style={styles.rowDivider} />
+          {renderRow(
+            "Subscription",
+            planSubtitle,
+            { name: "card-outline", type: "ionicons" },
+            undefined,
+            false,
+            () => handlePress("Subscription"),
           )}
           <View style={styles.rowDivider} />
           {renderRow(

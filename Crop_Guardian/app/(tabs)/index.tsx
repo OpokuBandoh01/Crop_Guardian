@@ -1,13 +1,15 @@
 // app/(tabs)/index.tsx
 import AnimatedScreen from "@/components/AnimatedScreen";
 import WeatherWidget from "@/components/WeatherWidget";
-import DailyTipCard from "@/components/daily-tips/DailyTipCard"; // NEW ADDITION: reusable daily tip card, replaces the old hardcoded card
+import DailyTipCard from "@/components/daily-tips/DailyTipCard";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import API from "@/services/api";
 import { confidenceLabel, fetchMyDetections } from "@/services/detectionApi";
+import { formatPlanEndDate } from "@/services/subscriptionApi";
 import { useNotificationStore } from "@/stores/notificationStore";
-import { useTipStore } from "@/stores/tipStore"; // NEW ADDITION
+import { useSubscriptionStore } from "@/stores/subscriptionStore";
+import { useTipStore } from "@/stores/tipStore";
 import { DetectionListItem } from "@/types/detection";
 import { formatRelativeTime } from "@/utils/timeFormat";
 import { Ionicons } from "@expo/vector-icons";
@@ -31,7 +33,10 @@ export default function HomeScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { unreadCount, fetchNotifications } = useNotificationStore();
-  const fetchTodayTips = useTipStore((state) => state.fetchTodayTips); // NEW ADDITION
+  const fetchTodayTips = useTipStore((state) => state.fetchTodayTips);
+
+  // NEW ADDITION: subscription status for home chip
+  const { status, fetchStatus } = useSubscriptionStore();
 
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
@@ -42,7 +47,6 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [weatherRefreshTrigger, setWeatherRefreshTrigger] = useState(0);
 
-  // //NEW ADDITION : latest detection for the Recent Scan card
   const [latestDetection, setLatestDetection] =
     useState<DetectionListItem | null>(null);
   const [latestLoading, setLatestLoading] = useState(false);
@@ -63,11 +67,12 @@ export default function HomeScreen() {
     }
   }, []);
 
-  // //NEW ADDITION : refresh recent scan whenever Home gains focus
+  // UPDATED: also refresh subscription status when Home gains focus
   useFocusEffect(
     useCallback(() => {
       loadLatestDetection();
-    }, [loadLatestDetection]),
+      fetchStatus();
+    }, [loadLatestDetection, fetchStatus]),
   );
 
   const getGreeting = (): string => {
@@ -88,16 +93,16 @@ export default function HomeScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     setWeatherRefreshTrigger((prev) => prev + 1);
-    // UPDATED: added fetchTodayTips() so pulling to refresh on the home
-    // screen also refreshes the daily tips card, matching the other cards.
 
     await Promise.all([
       fetchUser(),
       fetchMyCrops(),
       fetchNotifications(),
       fetchTodayTips(),
-      loadLatestDetection(), // //NEW ADDITION
+      loadLatestDetection(),
+      fetchStatus(), // NEW ADDITION
     ]);
+    setRefreshing(false);
   };
 
   const fetchUser = async () => {
@@ -154,20 +159,27 @@ export default function HomeScreen() {
     fetchUser();
     fetchMyCrops();
     fetchNotifications();
-    // NEW ADDITION: DailyTipCard also self-fetches on mount, but calling it
-    // here too means focus events (returning to this tab) keep tips fresh
-    // in step with the rest of the home screen's data.
     fetchTodayTips();
+    fetchStatus(); // NEW ADDITION
 
     const unsubscribe = navigation.addListener("focus", () => {
       fetchUser();
       fetchMyCrops();
       fetchNotifications();
+      fetchStatus(); // NEW ADDITION
     });
 
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigation, fetchNotifications]);
+
+  const isPaid = Boolean(status?.isPaid);
+  const chipTitle = isPaid
+    ? `Farmer plan active until ${formatPlanEndDate(status?.endsAt)}`
+    : `${status?.remainingFreeScans ?? 0} of 5 free scans left this month`;
+  const chipSubtitle = isPaid
+    ? "Unlimited scans and crop risk insights"
+    : "Tap to view Farmer Monthly";
 
   return (
     <SafeAreaView
@@ -226,6 +238,37 @@ export default function HomeScreen() {
                 </Text>
               </View>
             )}
+          </TouchableOpacity>
+        </AnimatedScreen>
+
+        {/* NEW ADDITION: subscription status chip */}
+        <AnimatedScreen delay={20}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.push("/upgrade")}
+            style={[
+              styles.subscriptionChip,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.inputBorder,
+              },
+            ]}
+          >
+            <View style={styles.subscriptionChipTextWrap}>
+              <Text
+                style={[styles.subscriptionChipTitle, { color: theme.text }]}
+              >
+                {chipTitle}
+              </Text>
+              <Text style={[styles.subscriptionChipSub, { color: theme.icon }]}>
+                {chipSubtitle}
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={moderateScale(16)}
+              color={theme.primary}
+            />
           </TouchableOpacity>
         </AnimatedScreen>
 
@@ -292,190 +335,12 @@ export default function HomeScreen() {
           </View>
         </AnimatedScreen>
 
-        {/* ================= FARM HEALTH OVERVIEW ================= */}
-
-        {/* <View style={styles.sectionHeader}>
-          <View style={styles.sectionHeaderTitleWrapper}>
-            <Image
-              source={require("@/assets/icons/seedlingicon.png")}
-              style={[styles.sectionHeaderIcon, { tintColor: theme.primary }]}
-              resizeMode="contain"
-            />
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              Farm Health Overview
-            </Text>
-          </View>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => router.push("/my-crops")}
-          >
-            <Text style={[styles.viewAllLink, { color: theme.icon }]}>
-              View My Crops
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.overviewCardsRow}>
-          {myCrops.length > 0 ? (
-            myCrops.slice(0, 2).map((cropItem, idx) => {
-              const cropName = cropItem.cropType.toLowerCase();
-              const formattedName =
-                cropName.charAt(0).toUpperCase() + cropName.slice(1);
-              const isWarning = idx === 1;
-
-              let cropIcon = require("@/assets/icons/maizeicon.png");
-              if (cropName === "cassava")
-                cropIcon = require("@/assets/icons/cassavaicon.png");
-              else if (cropName === "tomato")
-                cropIcon = require("@/assets/icons/seedlingicon.png");
-              else if (cropName === "pepper")
-                cropIcon = require("@/assets/icons/twoleaficon.png");
-              else if (cropName === "rice")
-                cropIcon = require("@/assets/icons/maizeicon.png");
-              else if (cropName === "plantain")
-                cropIcon = require("@/assets/icons/mycropsicon.png");
-              else if (cropName === "yam")
-                cropIcon = require("@/assets/icons/cassavaicon.png");
-              else if (cropName === "cocoa")
-                cropIcon = require("@/assets/icons/tipsicon.png");
-              else if (cropName === "groundnut")
-                cropIcon = require("@/assets/icons/twoleaficon.png");
-              else if (cropName === "onion")
-                cropIcon = require("@/assets/icons/seedlingicon.png");
-
-              const growthStage = cropStages[cropItem.cropType] || "Growing";
-
-              return (
-                <View
-                  key={idx}
-                  style={[
-                    styles.overviewCard,
-                    {
-                      backgroundColor: isWarning
-                        ? colorScheme === "light"
-                          ? "#FFFCE2"
-                          : "#2D2B1C"
-                        : colorScheme === "light"
-                          ? "#EBF7E9"
-                          : "#1E2C20",
-                    },
-                  ]}
-                >
-                  <View style={styles.overviewCardHeader}>
-                    <Image
-                      source={cropIcon}
-                      style={styles.cropIcon}
-                      resizeMode="contain"
-                    />
-                  </View>
-                  <Text style={[styles.cropNameText, { color: theme.text }]}>
-                    {formattedName}
-                  </Text>
-                  <Text
-                    style={
-                      isWarning
-                        ? styles.cropStatusWarning
-                        : styles.cropStatusHealthy
-                    }
-                  >
-                    {isWarning ? "Needs attention" : "Healthy"}
-                  </Text>
-                  <Text
-                    style={[styles.cropConditionSub, { color: theme.icon }]}
-                  >
-                    {growthStage} Stage
-                  </Text>
-                </View>
-              );
-            })
-          ) : (
-            <>
-              <View
-                style={[
-                  styles.overviewCard,
-                  {
-                    backgroundColor:
-                      colorScheme === "light" ? "#EBF7E9" : "#1E2C20",
-                  },
-                ]}
-              >
-                <View style={styles.overviewCardHeader}>
-                  <Image
-                    source={require("@/assets/icons/maizeicon.png")}
-                    style={styles.cropIcon}
-                    resizeMode="contain"
-                  />
-                </View>
-                <Text style={[styles.cropNameText, { color: theme.text }]}>
-                  Maize
-                </Text>
-                <Text style={styles.cropStatusHealthy}>Healthy</Text>
-                <Text style={[styles.cropConditionSub, { color: theme.icon }]}>
-                  Good condition
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.overviewCard,
-                  {
-                    backgroundColor:
-                      colorScheme === "light" ? "#FFFCE2" : "#2D2B1C",
-                  },
-                ]}
-              >
-                <View style={styles.overviewCardHeader}>
-                  <Image
-                    source={require("@/assets/icons/cassavaicon.png")}
-                    style={styles.cropIcon}
-                    resizeMode="contain"
-                  />
-                </View>
-                <Text style={[styles.cropNameText, { color: theme.text }]}>
-                  Cassava
-                </Text>
-                <Text style={styles.cropStatusWarning}>Needs attention</Text>
-                <Text style={[styles.cropConditionSub, { color: theme.icon }]}>
-                  Check now
-                </Text>
-              </View>
-            </>
-          )}
-
-          <View style={[styles.overviewCard, { backgroundColor: "#FEE5F5" }]}>
-            <View style={styles.overviewCardHeader}>
-              <View
-                style={[styles.alertIconBg, { backgroundColor: "#E480C8" }]}
-              >
-                <Image
-                  source={require("@/assets/icons/alerticon.png")}
-                  style={styles.cropIcon}
-                  resizeMode="contain"
-                />
-              </View>
-            </View>
-            <Text style={[styles.cropNameText, { color: "#11181C" }]}>
-              2 Alerts
-            </Text>
-            <Text style={styles.cropStatusAlert}>This week</Text>
-            <Text style={[styles.cropConditionSub, { color: "#687076" }]}>
-              Tap to view
-            </Text>
-          </View>
-        </View> */}
-
         {/* ================= QUICK ACTIONS ================= */}
 
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>
             Quick Actions
           </Text>
-          {/* <TouchableOpacity activeOpacity={0.7}>
-            <Text style={[styles.viewAllLink, { color: theme.icon }]}>
-              See all{" "}
-              <Ionicons name="chevron-forward" size={moderateScale(10)} />
-            </Text>
-          </TouchableOpacity> */}
         </View>
 
         <View style={styles.quickActionsRow}>
@@ -521,8 +386,6 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
 
-          {/* UPDATED: "Tips" quick action now navigates to the full daily
-              tips screen instead of doing nothing */}
           <TouchableOpacity
             style={[
               styles.quickActionBtn,
@@ -574,13 +437,9 @@ export default function HomeScreen() {
           style={styles.horizontalScrollView}
           contentContainerStyle={styles.horizontalScrollContent}
         >
-          {/* UPDATED: Card 1 was a hardcoded "Daily Tip" mock. Replaced with
-              the fully wired, reusable DailyTipCard which fetches its own
-              data from the tips API and handles loading/error/empty states. */}
           <DailyTipCard />
 
           {/* Card 2: Recent Scan */}
-          {/* //UPDATED : live data from GET /api/detection/my?limit=1 */}
           <View
             style={[
               styles.bottomCard,
@@ -689,6 +548,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={styles.weatherAlertLink}
               activeOpacity={0.8}
+              onPress={() => router.push("/weather")}
             >
               <Text style={styles.weatherAlertLinkText}>Stay prepared</Text>
               <Ionicons
@@ -714,7 +574,6 @@ const styles = StyleSheet.create({
     paddingBottom: verticalScale(100),
   },
 
-  // Header Section
   headerContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -744,6 +603,30 @@ const styles = StyleSheet.create({
   },
   notificationButton: {
     padding: scale(6),
+  },
+
+  // NEW ADDITION: home subscription chip
+  subscriptionChip: {
+    borderRadius: moderateScale(12),
+    borderWidth: 1,
+    paddingVertical: verticalScale(10),
+    paddingHorizontal: scale(14),
+    marginBottom: verticalScale(12),
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  subscriptionChipTextWrap: {
+    flex: 1,
+    paddingRight: scale(8),
+  },
+  subscriptionChipTitle: {
+    fontSize: moderateScale(12.5),
+    fontWeight: "700",
+  },
+  subscriptionChipSub: {
+    fontSize: moderateScale(11),
+    marginTop: verticalScale(2),
   },
 
   scanBanner: {
@@ -841,7 +724,6 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
 
-  // Section Headers
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -849,86 +731,11 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(12),
     marginTop: verticalScale(8),
   },
-  sectionHeaderTitleWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  sectionHeaderIcon: {
-    width: moderateScale(16),
-    height: moderateScale(16),
-    marginRight: scale(6),
-  },
   sectionTitle: {
     fontSize: moderateScale(16),
     fontWeight: "700",
   },
-  viewAllLink: {
-    fontSize: moderateScale(12),
-    fontWeight: "600",
-  },
 
-  // Farm Health Overview
-  overviewCardsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: scale(8),
-    marginBottom: verticalScale(20),
-  },
-  overviewCard: {
-    flex: 1,
-    borderRadius: moderateScale(12),
-    padding: scale(10),
-    minHeight: verticalScale(110),
-    justifyContent: "space-between",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  overviewCardHeader: {
-    alignSelf: "flex-start",
-  },
-  alertIconBg: {
-    width: moderateScale(26),
-    height: moderateScale(26),
-    borderRadius: moderateScale(13),
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cropIcon: {
-    width: moderateScale(24),
-    height: moderateScale(24),
-  },
-  cropNameText: {
-    fontSize: moderateScale(13),
-    fontWeight: "700",
-    marginTop: verticalScale(4),
-  },
-  cropStatusHealthy: {
-    fontSize: moderateScale(12),
-    fontWeight: "700",
-    color: "#2E7D32",
-    marginVertical: verticalScale(2),
-  },
-  cropStatusWarning: {
-    fontSize: moderateScale(11),
-    fontWeight: "700",
-    color: "#E4A11B",
-    marginVertical: verticalScale(2),
-  },
-  cropStatusAlert: {
-    fontSize: moderateScale(12),
-    fontWeight: "700",
-    color: "#C2185B",
-    marginVertical: verticalScale(2),
-  },
-  cropConditionSub: {
-    fontSize: moderateScale(10),
-    fontWeight: "400",
-  },
-
-  // Quick Actions
   quickActionsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -958,7 +765,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Bottom Scrollable Section
   horizontalScrollView: {
     marginHorizontal: scale(-16),
   },
@@ -977,12 +783,6 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
 
-  // NOTE: dailyTipCard / dailyTipLeft / cardHeaderRow / cardHeaderIcon /
-  // dailyTipHeaderTitle / dailyTipBody / blendBorder / dailyTipRight /
-  // dailyTipImage styles were removed from this file since that card's
-  // markup now lives entirely inside components/daily-tips/DailyTipCard.tsx.
-
-  // Card 2: Recent Scan
   recentScanCard: {
     width: scale(210),
     padding: scale(12),
@@ -1032,7 +832,6 @@ const styles = StyleSheet.create({
     color: "#687076",
   },
 
-  // Card 3: Weather Alert
   weatherAlertCard: {
     width: scale(210),
     padding: scale(12),

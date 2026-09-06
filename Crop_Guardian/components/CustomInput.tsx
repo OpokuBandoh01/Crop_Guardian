@@ -30,12 +30,7 @@ export const CustomInput: React.FC<CustomInputProps> = ({
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
 
-  // NEW ADDITION: TextInputProps already includes an `editable?: boolean`
-  // field (that is how ...props already lets callers lock a field), we
-  // are just reading it here too so we can style it differently.
-  // `props.editable !== false` means: locked only when editable is
-  // explicitly set to false, every existing screen that never passed
-  // `editable` at all keeps working exactly as before.
+  // NEW ADDITION: read editable without restructuring the view tree
   const isLocked = props.editable === false;
 
   return (
@@ -49,9 +44,7 @@ export const CustomInput: React.FC<CustomInputProps> = ({
           styles.container,
           {
             borderColor: theme.inputBorder,
-            // NEW ADDITION: a slightly muted background communicates
-            // "you can't edit this" at a glance, before the user even
-            // taps in, this is a small comfort/trust cue for the user.
+            // UPDATED: muted look when locked — visual only, no extra children
             backgroundColor: isLocked ? theme.background : theme.surface,
             opacity: isLocked ? 0.6 : 1,
           },
@@ -77,6 +70,8 @@ export const CustomInput: React.FC<CustomInputProps> = ({
           <TouchableOpacity
             onPress={() => setIsPasswordVisible(!isPasswordVisible)}
             style={styles.rightIcon}
+            // NEW ADDITION: block eye toggle while the field is locked
+            disabled={isLocked}
           >
             <Ionicons
               name={isPasswordVisible ? "eye-outline" : "eye-off-outline"}
@@ -86,17 +81,10 @@ export const CustomInput: React.FC<CustomInputProps> = ({
           </TouchableOpacity>
         )}
 
-        {/* NEW ADDITION: lock icon shown only for non-password, locked
-            fields (email/phone), so it never collides with the password
-            eye icon above. */}
-        {isLocked && !isPassword && (
-          <Ionicons
-            name="lock-closed-outline"
-            size={moderateScale(16)}
-            color={theme.icon}
-            style={styles.rightIcon}
-          />
-        )}
+        {/* UPDATED: lock icon removed as a conditional mount.
+            Mounting/unmounting Ionicons here while navigating caused the
+            Fabric crash: "addViewAt: View already has a parent".
+            Locked state is already shown via opacity + backgroundColor. */}
       </View>
     </View>
   );

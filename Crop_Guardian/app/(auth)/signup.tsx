@@ -8,6 +8,7 @@ import { Controller, useForm } from "react-hook-form";
 import {
   Alert,
   Image,
+  Keyboard,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -33,13 +34,12 @@ import {
   GHANA_REGIONS,
   GhanaRegion,
 } from "@/utils/utilities";
+import { InteractionManager } from "react-native";
 
 export default function SignUpScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
-
-  const loginUser = useAuthStore((state) => state.login);
 
   // Pull role + crops set during the onboarding flow
   const selectedRole = useOnboardingStore((state) => state.selectedRole);
@@ -257,6 +257,12 @@ export default function SignUpScreen() {
           console.warn("Could not send verification code automatically:", err);
         }
       }
+
+      Keyboard.dismiss();
+
+      await new Promise<void>((resolve) => {
+        InteractionManager.runAfterInteractions(() => resolve());
+      });
 
       router.replace({
         pathname: "/(auth)/verify-email",

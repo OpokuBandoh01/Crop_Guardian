@@ -14,6 +14,8 @@
 
 import API from "@/services/api";
 import type {
+  DetectionDetail,
+  DetectionListItem,
   GetDetectionByIdResponse,
   GetMyDetectionsParams,
   GetMyDetectionsResponse,
@@ -111,7 +113,6 @@ export async function fetchDetectionById(
   }
 }
 
-// //NEW ADDITION : confidence label for cards (psychology: plain language)
 export function confidenceLabel(confidence: number): string {
   // Backend stores 0–1; guard in case a value is already 0–100
   const pct = confidence > 1 ? confidence : confidence * 100;
@@ -123,4 +124,114 @@ export function confidenceLabel(confidence: number): string {
 export function confidencePercent(confidence: number): string {
   const pct = confidence > 1 ? confidence : confidence * 100;
   return `${Math.round(pct)}%`;
+}
+
+export async function cacheNewDetection(scan: {
+  id: string;
+  imageUrl?: string | null;
+  cropType: string;
+  diseaseName: string;
+  confidence: number;
+  symptoms?: string | null;
+  causes?: string | null;
+  organicTreatments?: string | null;
+  chemicalOptions?: string | null;
+  prevention?: string | null;
+  localNotes?: string | null;
+  possibleDiseases?: Array<{ name: string; confidence: number }> | null;
+  aiProvider?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}): Promise<void> {
+  if (!scan?.id) return;
+
+  const now = new Date().toISOString();
+
+  // Build the lightweight list item shape used by Scan History + Home
+  const listItem: DetectionListItem = {
+    id: scan.id,
+    imageUrl: scan.imageUrl ?? null,
+    cropType: scan.cropType,
+    diseaseName: scan.diseaseName,
+    confidence: scan.confidence,
+    // Backend normally truncates; we do a safe local snippet here
+    symptomsSnippet: scan.symptoms
+      ? scan.symptoms.trim().replace(/\s+/g, " ").slice(0, 80) +
+        (scan.symptoms.length > 80 ? "..." : "")
+      : "",
+    createdAt: scan.createdAt ?? now,
+  };
+
+  // 1) Update main list cache (page 1, all crops, no search)
+  try {
+    const mainListKey = listCacheKey({}); // uses existing helper → "@detections:list:all:none"
+    const raw = await AsyncStorage.getItem(mainListKey);
+
+    let nextList: GetMyDetectionsResponse;
+
+    if (raw) {
+      const cached = JSON.parse(raw) as GetMyDetectionsResponse;
+      const withoutDuplicate = (cached.data || []).filter(
+        (item) => item.id !== listItem.id,
+      );
+      nextList = {
+        ...cached,
+        success: true,
+        data: [listItem, ...withoutDuplicate].slice(0, 10), // keep first page size sensible
+        pagination: {
+          ...cached.pagination,
+          total: (cached.pagination?.total ?? withoutDuplicate.length) + 1,
+        },
+      };
+    } else {
+      // No previous cache — create a minimal one so offline history still works
+      nextList = {
+        success: true,
+        message: "Cached from latest scan",
+        data: [listItem],
+        pagination: {
+          page: 1,
+          limit: 10,
+          total: 1,
+          totalPages: 1,
+        },
+      };
+    }
+
+    await AsyncStorage.setItem(mainListKey, JSON.stringify(nextList));
+  } catch (err) {
+    console.warn("Failed to update detection list cache:", err);
+  }
+
+  // 2) Save full detail so opening the scan offline works
+  try {
+    const detail: DetectionDetail = {
+      id: scan.id,
+      imageUrl: scan.imageUrl ?? null,
+      cropType: scan.cropType,
+      diseaseName: scan.diseaseName,
+      confidence: scan.confidence,
+      possibleDiseases: scan.possibleDiseases ?? null,
+      symptoms: scan.symptoms ?? null,
+      causes: scan.causes ?? null,
+      organicTreatments: scan.organicTreatments ?? null,
+      chemicalOptions: scan.chemicalOptions ?? null,
+      prevention: scan.prevention ?? null,
+      localNotes: scan.localNotes ?? null,
+      aiProvider: scan.aiProvider ?? null,
+      createdAt: scan.createdAt ?? now,
+      updatedAt: scan.updatedAt ?? now,
+    };
+
+    await AsyncStorage.setItem(
+      `${DETAIL_CACHE_PREFIX}${scan.id}`,
+      JSON.stringify({
+        success: true,
+        message: "Cached from latest scan",
+        data: detail,
+      }),
+    );
+  } catch (err) {
+    console.warn("Failed to update detection detail cache:", err);
+  }
 }

@@ -1,17 +1,10 @@
 // components/profile/StatItem.tsx
-// A single column inside the profile stats row (e.g. "My Crops -> 5").
-// Pulled into its own component so profile.tsx does not repeat the same
-// JSX block four times, and so any future screen (e.g. a home-screen
-// summary card) can reuse a single stat without copying markup.
 
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { moderateScale, verticalScale } from "react-native-size-matters";
 
-// A union type restricts iconFamily to exactly these two strings, so a
-// typo like "materal" is caught by TypeScript instead of failing silently
-// at runtime with a blank icon.
 type IconFamily = "ionicons" | "material";
 
 interface StatItemProps {
@@ -19,6 +12,9 @@ interface StatItemProps {
   iconFamily?: IconFamily;
   label: string;
   value: number | string;
+  //  make the whole column tappable when provided
+  onPress?: () => void;
+  disabled?: boolean;
 }
 
 export function StatItem({
@@ -26,15 +22,14 @@ export function StatItem({
   iconFamily = "ionicons",
   label,
   value,
+  onPress,
+  disabled = false,
 }: StatItemProps) {
-  // Choosing which icon component to render at runtime based on a prop,
-  // rather than writing two near-identical JSX branches everywhere this
-  // is used.
   const IconComponent =
     iconFamily === "material" ? MaterialCommunityIcons : Ionicons;
 
-  return (
-    <View style={styles.statCol}>
+  const content = (
+    <>
       <View style={styles.statHeaderRow}>
         <IconComponent
           name={icon as any}
@@ -45,8 +40,25 @@ export function StatItem({
         <Text style={styles.statLabel}>{label}</Text>
       </View>
       <Text style={styles.statValue}>{value}</Text>
-    </View>
+    </>
   );
+
+  //  tappable when onPress is set (Followers / Following)
+  if (onPress) {
+    return (
+      <TouchableOpacity
+        style={styles.statCol}
+        onPress={onPress}
+        activeOpacity={0.7}
+        disabled={disabled}
+      >
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  // non-tappable stats stay as a plain View
+  return <View style={styles.statCol}>{content}</View>;
 }
 
 const styles = StyleSheet.create({

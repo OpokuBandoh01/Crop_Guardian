@@ -1,8 +1,12 @@
 // stores/communityStore.ts
 
 import {
+  deleteCommunityPost,
   fetchCommunityPosts,
   fetchCommunityTags,
+  fetchFollowers,
+  fetchFollowing,
+  fetchMyPosts,
   fetchSavedPosts,
   followCommunityUser,
   likeCommunityPost,
@@ -11,13 +15,19 @@ import {
   unlikeCommunityPost,
   unsaveCommunityPost,
 } from "@/services/communityApi";
-import type { CommunityPost, CommunityTag } from "@/types/community";
+import type {
+  CommunityPost,
+  CommunityTag,
+  ConnectionUser,
+} from "@/types/community";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 const POSTS_PER_PAGE = 10;
 const SAVED_PER_PAGE = 10;
+const MY_POSTS_PER_PAGE = 10;
+const CONNECTIONS_PER_PAGE = 20;
 
 interface CommunityStore {
   tags: CommunityTag[];
@@ -51,6 +61,31 @@ interface CommunityStore {
   savedPage: number;
   savedTotalPages: number;
 
+  myPosts: CommunityPost[];
+  myPostsLoading: boolean;
+  myPostsRefreshing: boolean;
+  myPostsLoadingMore: boolean;
+  myPostsError: string | null;
+  myPostsPage: number;
+  myPostsTotalPages: number;
+  deletingPostIds: Record<string, boolean>;
+
+  followers: ConnectionUser[];
+  followersLoading: boolean;
+  followersRefreshing: boolean;
+  followersLoadingMore: boolean;
+  followersError: string | null;
+  followersPage: number;
+  followersTotalPages: number;
+
+  followingList: ConnectionUser[];
+  followingListLoading: boolean;
+  followingListRefreshing: boolean;
+  followingListLoadingMore: boolean;
+  followingListError: string | null;
+  followingListPage: number;
+  followingListTotalPages: number;
+
   fetchTags: () => Promise<void>;
   fetchPosts: (options?: { reset?: boolean }) => Promise<void>;
   refreshPosts: () => Promise<void>;
@@ -65,6 +100,25 @@ interface CommunityStore {
   fetchSavedPostsList: (options?: { reset?: boolean }) => Promise<void>;
   refreshSavedPosts: () => Promise<void>;
   loadMoreSavedPosts: () => Promise<void>;
+
+  fetchMyPostsList: (options?: { reset?: boolean }) => Promise<void>;
+  refreshMyPosts: () => Promise<void>;
+  loadMoreMyPosts: () => Promise<void>;
+  // optimistic delete: removes from myPosts + posts + savedPosts, restores on error
+  deleteMyPost: (postId: string) => Promise<boolean>;
+
+  fetchFollowersList: (
+    userId: string,
+    options?: { reset?: boolean },
+  ) => Promise<void>;
+  refreshFollowersList: (userId: string) => Promise<void>;
+  loadMoreFollowers: (userId: string) => Promise<void>;
+  fetchFollowingList: (
+    userId: string,
+    options?: { reset?: boolean },
+  ) => Promise<void>;
+  refreshFollowingList: (userId: string) => Promise<void>;
+  loadMoreFollowing: (userId: string) => Promise<void>;
 }
 
 export const useCommunityStore = create<CommunityStore>()(
@@ -97,6 +151,31 @@ export const useCommunityStore = create<CommunityStore>()(
       savedError: null,
       savedPage: 1,
       savedTotalPages: 1,
+
+      myPosts: [],
+      myPostsLoading: false,
+      myPostsRefreshing: false,
+      myPostsLoadingMore: false,
+      myPostsError: null,
+      myPostsPage: 1,
+      myPostsTotalPages: 1,
+      deletingPostIds: {},
+
+      followers: [],
+      followersLoading: false,
+      followersRefreshing: false,
+      followersLoadingMore: false,
+      followersError: null,
+      followersPage: 1,
+      followersTotalPages: 1,
+
+      followingList: [],
+      followingListLoading: false,
+      followingListRefreshing: false,
+      followingListLoadingMore: false,
+      followingListError: null,
+      followingListPage: 1,
+      followingListTotalPages: 1,
 
       fetchTags: async () => {
         set({ tagsLoading: true });
@@ -310,13 +389,26 @@ export const useCommunityStore = create<CommunityStore>()(
 
       //optimistic follow / unfollow (persisted via followingUserIds)
       toggleFollow: async (userId) => {
-        const { followingUserIds, followLoadingUserIds, posts } = get();
+        const {
+          followingUserIds,
+          followLoadingUserIds,
+          posts,
+          followers,
+          followingList,
+        } = get();
         if (followLoadingUserIds[userId]) return;
 
         const wasFollowing =
           followingUserIds[userId] ??
           posts.find((p) => p.author.id === userId)?.author.isFollowing ??
+          followers.find((u) => u.id === userId)?.isFollowing ??
+          followingList.find((u) => u.id === userId)?.isFollowing ??
           false;
+
+        const applyIsFollowing = (list: ConnectionUser[]) =>
+          list.map((u) =>
+            u.id === userId ? { ...u, isFollowing: !wasFollowing } : u,
+          );
 
         set({
           followLoadingUserIds: { ...followLoadingUserIds, [userId]: true },
@@ -335,6 +427,9 @@ export const useCommunityStore = create<CommunityStore>()(
                 }
               : p,
           ),
+          //  keep row, only flip isFollowing on both tabs
+          followers: applyIsFollowing(followers),
+          followingList: applyIsFollowing(followingList),
         });
 
         try {
@@ -345,6 +440,10 @@ export const useCommunityStore = create<CommunityStore>()(
           }
         } catch (err) {
           console.error("Failed to toggle follow:", err);
+          const revertIsFollowing = (list: ConnectionUser[]) =>
+            list.map((u) =>
+              u.id === userId ? { ...u, isFollowing: wasFollowing } : u,
+            );
           set((state) => ({
             followingUserIds: {
               ...state.followingUserIds,
@@ -361,6 +460,8 @@ export const useCommunityStore = create<CommunityStore>()(
                   }
                 : p,
             ),
+            followers: revertIsFollowing(state.followers),
+            followingList: revertIsFollowing(state.followingList),
           }));
         } finally {
           set((state) => {
@@ -423,6 +524,252 @@ export const useCommunityStore = create<CommunityStore>()(
         set({ savedLoadingMore: true, savedPage: savedPage + 1 });
         await get().fetchSavedPostsList({ reset: false });
         set({ savedLoadingMore: false });
+      },
+
+      fetchMyPostsList: async (options) => {
+        const reset = options?.reset ?? true;
+        const isFirstLoad = reset && get().myPosts.length === 0;
+        set({
+          myPostsLoading: isFirstLoad,
+          myPostsError: null,
+        });
+
+        try {
+          const res = await fetchMyPosts({
+            page: reset ? 1 : get().myPostsPage,
+            limit: MY_POSTS_PER_PAGE,
+          });
+
+          if (res.success) {
+            set((state) => ({
+              myPosts: reset ? res.data : [...state.myPosts, ...res.data],
+              myPostsPage: res.pagination.page,
+              myPostsTotalPages: res.pagination.totalPages,
+            }));
+          }
+        } catch (err) {
+          console.error("Failed to fetch my posts:", err);
+          set({
+            myPostsError: "Could not load your posts. Pull down to try again.",
+          });
+        } finally {
+          set({ myPostsLoading: false });
+        }
+      },
+
+      refreshMyPosts: async () => {
+        set({ myPostsRefreshing: true });
+        await get().fetchMyPostsList({ reset: true });
+        set({ myPostsRefreshing: false });
+      },
+
+      loadMoreMyPosts: async () => {
+        const {
+          myPostsPage,
+          myPostsTotalPages,
+          myPostsLoadingMore,
+          myPostsLoading,
+          myPostsRefreshing,
+        } = get();
+        if (myPostsLoadingMore || myPostsLoading || myPostsRefreshing) return;
+        if (myPostsPage >= myPostsTotalPages) return;
+
+        set({ myPostsLoadingMore: true, myPostsPage: myPostsPage + 1 });
+        await get().fetchMyPostsList({ reset: false });
+        set({ myPostsLoadingMore: false });
+      },
+
+      deleteMyPost: async (postId) => {
+        const { myPosts, posts, savedPosts, deletingPostIds } = get();
+
+        if (deletingPostIds[postId]) return false;
+
+        const removedFromMy = myPosts.find((p) => p.id === postId);
+        if (!removedFromMy) return false;
+
+        const previousMyPosts = myPosts;
+        const previousPosts = posts;
+        const previousSaved = savedPosts;
+
+        // optimistic remove everywhere this post might appear
+        set({
+          deletingPostIds: { ...deletingPostIds, [postId]: true },
+          myPosts: myPosts.filter((p) => p.id !== postId),
+          posts: posts.filter((p) => p.id !== postId),
+          savedPosts: savedPosts.filter((p) => p.id !== postId),
+        });
+
+        try {
+          const res = await deleteCommunityPost(postId);
+          if (!res.success) {
+            // restore on soft failure
+            set({
+              myPosts: previousMyPosts,
+              posts: previousPosts,
+              savedPosts: previousSaved,
+            });
+            return false;
+          }
+          return true;
+        } catch (err) {
+          console.error("Failed to delete post:", err);
+          // restore on network / hard failure
+          set({
+            myPosts: previousMyPosts,
+            posts: previousPosts,
+            savedPosts: previousSaved,
+          });
+          return false;
+        } finally {
+          set((state) => {
+            const updated = { ...state.deletingPostIds };
+            delete updated[postId];
+            return { deletingPostIds: updated };
+          });
+        }
+      },
+
+      //  followers list for connections screen
+      fetchFollowersList: async (userId, options) => {
+        const reset = options?.reset ?? true;
+        const isFirstLoad = reset && get().followers.length === 0;
+        set({
+          followersLoading: isFirstLoad,
+          followersError: null,
+        });
+
+        try {
+          const res = await fetchFollowers(userId, {
+            page: reset ? 1 : get().followersPage,
+            limit: CONNECTIONS_PER_PAGE,
+          });
+
+          if (res.success) {
+            const followUpdates: Record<string, boolean> = {
+              ...get().followingUserIds,
+            };
+            res.data.forEach((u) => {
+              if (typeof u.isFollowing === "boolean") {
+                followUpdates[u.id] = u.isFollowing;
+              }
+            });
+
+            set((state) => ({
+              followers: reset ? res.data : [...state.followers, ...res.data],
+              followersPage: res.pagination.page,
+              followersTotalPages: res.pagination.totalPages,
+              followingUserIds: followUpdates,
+            }));
+          }
+        } catch (err) {
+          console.error("Failed to fetch followers:", err);
+          set({
+            followersError: "Could not load followers. Pull down to try again.",
+          });
+        } finally {
+          set({ followersLoading: false });
+        }
+      },
+
+      refreshFollowersList: async (userId) => {
+        set({ followersRefreshing: true });
+        await get().fetchFollowersList(userId, { reset: true });
+        set({ followersRefreshing: false });
+      },
+
+      loadMoreFollowers: async (userId) => {
+        const {
+          followersPage,
+          followersTotalPages,
+          followersLoadingMore,
+          followersLoading,
+          followersRefreshing,
+        } = get();
+        if (followersLoadingMore || followersLoading || followersRefreshing)
+          return;
+        if (followersPage >= followersTotalPages) return;
+
+        set({
+          followersLoadingMore: true,
+          followersPage: followersPage + 1,
+        });
+        await get().fetchFollowersList(userId, { reset: false });
+        set({ followersLoadingMore: false });
+      },
+
+      //  following list for connections screen
+      fetchFollowingList: async (userId, options) => {
+        const reset = options?.reset ?? true;
+        const isFirstLoad = reset && get().followingList.length === 0;
+        set({
+          followingListLoading: isFirstLoad,
+          followingListError: null,
+        });
+
+        try {
+          const res = await fetchFollowing(userId, {
+            page: reset ? 1 : get().followingListPage,
+            limit: CONNECTIONS_PER_PAGE,
+          });
+
+          if (res.success) {
+            const followUpdates: Record<string, boolean> = {
+              ...get().followingUserIds,
+            };
+            res.data.forEach((u) => {
+              if (typeof u.isFollowing === "boolean") {
+                followUpdates[u.id] = u.isFollowing;
+              }
+            });
+
+            set((state) => ({
+              followingList: reset
+                ? res.data
+                : [...state.followingList, ...res.data],
+              followingListPage: res.pagination.page,
+              followingListTotalPages: res.pagination.totalPages,
+              followingUserIds: followUpdates,
+            }));
+          }
+        } catch (err) {
+          console.error("Failed to fetch following:", err);
+          set({
+            followingListError:
+              "Could not load following. Pull down to try again.",
+          });
+        } finally {
+          set({ followingListLoading: false });
+        }
+      },
+
+      refreshFollowingList: async (userId) => {
+        set({ followingListRefreshing: true });
+        await get().fetchFollowingList(userId, { reset: true });
+        set({ followingListRefreshing: false });
+      },
+
+      loadMoreFollowing: async (userId) => {
+        const {
+          followingListPage,
+          followingListTotalPages,
+          followingListLoadingMore,
+          followingListLoading,
+          followingListRefreshing,
+        } = get();
+        if (
+          followingListLoadingMore ||
+          followingListLoading ||
+          followingListRefreshing
+        )
+          return;
+        if (followingListPage >= followingListTotalPages) return;
+
+        set({
+          followingListLoadingMore: true,
+          followingListPage: followingListPage + 1,
+        });
+        await get().fetchFollowingList(userId, { reset: false });
+        set({ followingListLoadingMore: false });
       },
     }),
     {

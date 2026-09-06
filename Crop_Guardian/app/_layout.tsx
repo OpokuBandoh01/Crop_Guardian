@@ -102,6 +102,8 @@ export default function RootLayout() {
           <Stack.Screen name="daily-tips" options={{ headerShown: false }} />
           <Stack.Screen name="create-post" options={{ headerShown: false }} />
           <Stack.Screen name="subscription" options={{ headerShown: false }} />
+          <Stack.Screen name="saved-posts" options={{ headerShown: false }} />
+          <Stack.Screen name="my-posts" options={{ headerShown: false }} />
           <Stack.Screen name="upgrade" options={{ headerShown: false }} />
           <Stack.Screen
             name="modal"

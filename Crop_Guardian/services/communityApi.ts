@@ -9,6 +9,10 @@ import type {
   CreatePostResponse,
   FollowUserResponse,
   GetCommentsResponse,
+  GetConnectionsParams,
+  GetConnectionsResponse,
+  GetMyPostsParams,
+  GetMyPostsResponse,
   GetPostsParams,
   GetPostsResponse,
   GetSavedPostsResponse,
@@ -203,6 +207,47 @@ export async function unfollowCommunityUser(
 ): Promise<FollowUserResponse> {
   const res = await API.delete<FollowUserResponse>(
     `/api/community/users/${userId}/follow`,
+  );
+  return res.data;
+}
+
+export async function fetchMyPosts(
+  params?: GetMyPostsParams,
+): Promise<GetMyPostsResponse> {
+  const res = await API.get<GetMyPostsResponse>(
+    "/api/community/users/me/posts",
+    { params },
+  );
+  return res.data;
+}
+
+export async function deleteCommunityPost(
+  postId: string,
+): Promise<CommunitySimpleResponse> {
+  const res = await API.delete<CommunitySimpleResponse>(
+    `/api/community/posts/${postId}`,
+  );
+  return res.data;
+}
+
+export async function fetchFollowers(
+  userId: string,
+  params?: GetConnectionsParams,
+): Promise<GetConnectionsResponse> {
+  const res = await API.get<GetConnectionsResponse>(
+    `/api/community/users/${userId}/followers`,
+    { params },
+  );
+  return res.data;
+}
+
+export async function fetchFollowing(
+  userId: string,
+  params?: GetConnectionsParams,
+): Promise<GetConnectionsResponse> {
+  const res = await API.get<GetConnectionsResponse>(
+    `/api/community/users/${userId}/following`,
+    { params },
   );
   return res.data;
 }

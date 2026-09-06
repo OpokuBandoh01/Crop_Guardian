@@ -78,6 +78,8 @@ export default function ProfileScreen() {
       router.push("/rate-us");
     } else if (screen === "Saved Posts") {
       router.push("/saved-posts");
+    } else if (screen === "My Posts") {
+      router.push("/my-posts");
     } else if (screen === "Subscription") {
       router.push("/subscription");
     }
@@ -262,7 +264,22 @@ export default function ProfileScreen() {
 
           <View style={styles.cardDivider} />
 
-          <StatsRow stats={stats} loading={loading} />
+          <StatsRow
+            stats={stats}
+            loading={loading}
+            onPressFollowers={() =>
+              router.push({
+                pathname: "/connections",
+                params: { tab: "followers" },
+              })
+            }
+            onPressFollowing={() =>
+              router.push({
+                pathname: "/connections",
+                params: { tab: "following" },
+              })
+            }
+          />
         </View>
 
         <Text style={[styles.sectionTitle, { color: theme.primary }]}>
@@ -287,14 +304,14 @@ export default function ProfileScreen() {
             () => handlePress("Subscription"),
           )}
           <View style={styles.rowDivider} />
-          {renderRow(
+          {/* {renderRow(
             "Farm Information",
             "Manage your farm location and size",
             { name: "sprout-outline", type: "material" },
             undefined,
             false,
             () => handlePress("Farm Information"),
-          )}
+          )} */}
           <View style={styles.rowDivider} />
           {renderRow(
             "Change Password",
@@ -305,14 +322,14 @@ export default function ProfileScreen() {
             () => handlePress("Change Password"),
           )}
           <View style={styles.rowDivider} />
-          {renderRow(
+          {/* {renderRow(
             "Offline Database",
             "Download and update crop diagnostic models",
             { name: "download-outline", type: "ionicons" },
             undefined,
             false,
             () => handlePress("Offline Database"),
-          )}
+          )} */}
           <View style={styles.rowDivider} />
           {renderRow(
             "Saved Posts",
@@ -321,6 +338,16 @@ export default function ProfileScreen() {
             undefined,
             false,
             () => handlePress("Saved Posts"),
+          )}
+          {/*My Posts entry under Account, next to Saved Posts */}
+          <View style={styles.rowDivider} />
+          {renderRow(
+            "My Posts",
+            "Posts you shared with the community",
+            { name: "document-text-outline", type: "ionicons" },
+            undefined,
+            false,
+            () => handlePress("My Posts"),
           )}
         </View>
 

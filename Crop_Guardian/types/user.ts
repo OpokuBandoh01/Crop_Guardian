@@ -53,6 +53,8 @@ export interface UserStats {
   detectionsCount: number;
   notificationsCount: number;
   unreadNotificationsCount: number;
+  followersCount: number;
+  followingCount: number;
 }
 
 // Full shape of GET /api/auth/me.

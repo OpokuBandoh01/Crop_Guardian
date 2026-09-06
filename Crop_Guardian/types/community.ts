@@ -137,3 +137,36 @@ export interface FollowUserResponse {
   isFollowing?: boolean;
   followersCount?: number;
 }
+
+export interface GetMyPostsResponse {
+  success: boolean;
+  message: string;
+  data: CommunityPost[];
+  pagination: CommunityPagination;
+}
+
+export interface GetMyPostsParams {
+  page?: number;
+  limit?: number;
+}
+
+export interface ConnectionUser {
+  id: string;
+  fullName: string;
+  avatarUrl: string | null;
+  reputationScore: number;
+  followedAt: string;
+  isFollowing?: boolean;
+}
+
+export interface GetConnectionsResponse {
+  success: boolean;
+  message: string;
+  data: ConnectionUser[];
+  pagination: CommunityPagination;
+}
+
+export interface GetConnectionsParams {
+  page?: number;
+  limit?: number;
+}

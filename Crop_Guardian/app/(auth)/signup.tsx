@@ -243,12 +243,14 @@ export default function SignUpScreen() {
 
       completeOnboarding();
 
-      //  formattedPhone is now always present, so the previous
-      // `if (formattedPhone)` guard around this call is removed.
-      try {
-        await forgotPassword(formattedPhone);
-      } catch (err) {
-        console.warn("Could not send verification code automatically:", err);
+      const otpAlreadySent = response.data?.otpSent === true;
+
+      if (!otpAlreadySent) {
+        try {
+          await forgotPassword(formattedPhone);
+        } catch (err) {
+          console.warn("Could not send verification code automatically:", err);
+        }
       }
 
       router.replace({

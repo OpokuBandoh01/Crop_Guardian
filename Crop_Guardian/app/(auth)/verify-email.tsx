@@ -19,7 +19,7 @@ import { CustomButton } from "@/components/CustomButton";
 import { OTPInput } from "@/components/OTPInput";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { forgotPassword, verifyResetOtp } from "@/services/api"; //
+import { forgotPassword, verifyResetOtp } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 
 export default function VerifyEmailScreen() {
@@ -31,9 +31,12 @@ export default function VerifyEmailScreen() {
     phoneNumber: string;
     origin?: string;
   }>();
+  // "signup" means the user just registered and is already authenticated,
+  // but isEmailVerified is still false. Tabs will redirect here until verified.
   const isSignupFlow = origin === "signup";
 
   const updateUser = useAuthStore((state) => state.updateUser);
+  const logout = useAuthStore((state) => state.logout);
 
   const [otpCode, setOtpCode] = useState("");
 
@@ -43,11 +46,39 @@ export default function VerifyEmailScreen() {
   const [errorMessage, setErrorMessage] = useState("");
   const [resendMessage, setResendMessage] = useState("");
 
+  // Single busy flag: disable every interactive control while either
+  // verify or resend is in flight (app-wide loading rule).
   const isBusy = isVerifying || isResending;
 
   const handleCodeFilled = (code: string) => {
     setOtpCode(code);
     setErrorMessage("");
+  };
+
+  /**
+   * Exit path for this screen.
+   * - Signup flow: user is authenticated but not verified. Tabs would
+   *   bounce them back here if we only navigated away. Logout first so
+   *   they land cleanly on login and are not trapped.
+   * - Forgot-password flow: user is not in that verified-guard state,
+   *   so a normal back to the previous screen is enough.
+   */
+  const handleExit = () => {
+    if (isBusy) return;
+
+    if (isSignupFlow) {
+      logout();
+      router.replace("/(auth)/login");
+      return;
+    }
+
+    // Prefer back when the screen was pushed (forgot-password).
+    // Fall back to login if there is nothing to go back to.
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(auth)/login");
+    }
   };
 
   const handleVerify = async () => {
@@ -91,7 +122,7 @@ export default function VerifyEmailScreen() {
     }
   };
 
-  // : resend code handler, reuses the forgotPassword API call
+  // Resend code handler, reuses the forgotPassword API call
   const handleResend = async () => {
     if (!phoneNumber || isBusy) return;
 
@@ -119,8 +150,14 @@ export default function VerifyEmailScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Reusable Auth Header (No Back Button) */}
-        <AuthHeader title="CropGuardian" showBackButton={false} />
+        {/* Back / exit is always available so the user is never trapped.
+            Disabled only while a network action is running. */}
+        <AuthHeader
+          title="CropGuardian"
+          showBackButton={true}
+          disabled={isBusy}
+          onBackPress={handleExit}
+        />
 
         {/* Logo Placeholder */}
         <View style={styles.logoContainer}>
@@ -140,21 +177,20 @@ export default function VerifyEmailScreen() {
 
         {/* Title */}
         <Text style={[styles.title, { color: theme.text }]}>
-          Verify Your Phone Number {/* UPDATED - was "Verify Your Email" */}
+          Verify Your Phone Number
         </Text>
         <Text style={[styles.subtitle, { color: theme.icon }]}>
           Enter the 6-digit code sent to {phoneNumber || "your phone"}{" "}
-          {/* UPDATED - shows the phone number, was generic email text */}
         </Text>
 
-        {/* : inline error bzanner */}
+        {/* Inline error banner */}
         {errorMessage ? (
           <View style={styles.errorBanner}>
             <Text style={styles.errorText}>{errorMessage}</Text>
           </View>
         ) : null}
 
-        {/* : inline resend confirmation banner */}
+        {/* Inline resend confirmation banner */}
         {resendMessage ? (
           <View style={styles.successBanner}>
             <Text style={styles.successText}>{resendMessage}</Text>
@@ -163,8 +199,7 @@ export default function VerifyEmailScreen() {
 
         {/* Form Fields */}
         <View style={styles.formContainer}>
-          <OTPInput onCodeFilled={handleCodeFilled} editable={!isBusy} />{" "}
-          {/* UPDATED - wired to state, disabled while busy */}
+          <OTPInput onCodeFilled={handleCodeFilled} editable={!isBusy} />
           <CustomButton
             title="Continue"
             onPress={handleVerify}
@@ -173,25 +208,41 @@ export default function VerifyEmailScreen() {
           />
         </View>
 
-        {/* Footer Link */}
+        {/* Footer Link: resend */}
         <View style={styles.footerContainer}>
           <Text style={[styles.footerText, { color: theme.text }]}>
             {"Didn't you receive any code? "}
           </Text>
           <TouchableOpacity onPress={handleResend} disabled={isBusy}>
-            {" "}
-            {/* UPDATED - wired to handleResend, disabled while busy */}
             <Text
               style={[
                 styles.footerLink,
-                { color: isBusy ? theme.icon : theme.primary }, //  - visually dims the link while disabled
+                { color: isBusy ? theme.icon : theme.primary },
               ]}
             >
-              {isResending ? "Sending..." : "Resend code"}{" "}
-              {/*  - shows sending state */}
+              {isResending ? "Sending..." : "Resend code"}
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Secondary exit: clearer copy for users who feel stuck.
+            Same handler as the header back button. */}
+        <TouchableOpacity
+          onPress={handleExit}
+          disabled={isBusy}
+          style={styles.exitLink}
+          accessibilityRole="button"
+          accessibilityLabel={isSignupFlow ? "Go back to login" : "Go back"}
+        >
+          <Text
+            style={[
+              styles.exitLinkText,
+              { color: isBusy ? theme.icon : theme.primary },
+            ]}
+          >
+            {isSignupFlow ? "Wrong number? Back to Login" : "Go back"}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -244,7 +295,15 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(14),
     fontWeight: "700",
   },
-  // : banner styles, matching change-password.tsx's pattern
+  exitLink: {
+    marginTop: verticalScale(24),
+    alignItems: "center",
+    paddingVertical: verticalScale(8),
+  },
+  exitLinkText: {
+    fontSize: moderateScale(14),
+    fontWeight: "600",
+  },
   errorBanner: {
     backgroundColor: "#C62828",
     paddingVertical: verticalScale(10),

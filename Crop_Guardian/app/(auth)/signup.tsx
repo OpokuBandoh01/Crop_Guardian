@@ -236,16 +236,21 @@ export default function SignUpScreen() {
 
       const response = await API.post("/api/auth/register", payload);
 
-      loginUser(response.data.token, {
+      const registerToken = response.data.token as string;
+      const registerUser = {
         ...response.data.user,
         location: userLocation,
-      });
+      };
+
+      useAuthStore
+        .getState()
+        .setPendingRegistration(registerToken, registerUser);
 
       completeOnboarding();
 
       const otpAlreadySent = response.data?.otpSent === true;
-
       if (!otpAlreadySent) {
+        //  fallback resend path
         try {
           await forgotPassword(formattedPhone);
         } catch (err) {

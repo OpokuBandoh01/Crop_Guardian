@@ -24,27 +24,28 @@ interface AuthStore {
   user: User | null;
   isAuthenticated: boolean;
   hasHydrated: boolean;
+  pendingToken: string | null;
+  pendingUser: User | null;
 
   login: (token: string, user: User) => void;
   logout: () => void;
   setHasHydrated: (state: boolean) => void;
   updateUser: (updatedUser: Partial<User>) => void;
   refreshUser: () => Promise<void>;
+  setPendingRegistration: (token: string, user: User) => void;
+  clearPendingRegistration: () => void;
+  confirmPendingRegistration: () => void;
 }
 
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
-      // auth token
       token: null,
-
-      // logged in user
       user: null,
-
-      // auth status
       isAuthenticated: false,
-
       hasHydrated: false,
+      pendingToken: null,
+      pendingUser: null,
 
       // login handler
       login: (token, user) =>
@@ -52,6 +53,8 @@ export const useAuthStore = create<AuthStore>()(
           token,
           user,
           isAuthenticated: true,
+          pendingToken: null,
+          pendingUser: null,
         }),
 
       // logout handler
@@ -66,6 +69,8 @@ export const useAuthStore = create<AuthStore>()(
           token: null,
           user: null,
           isAuthenticated: false,
+          pendingToken: null,
+          pendingUser: null,
         });
       },
 
@@ -98,6 +103,34 @@ export const useAuthStore = create<AuthStore>()(
             get().logout();
           }
         }
+      },
+
+      setPendingRegistration: (token, user) =>
+        set({
+          pendingToken: token,
+          pendingUser: user,
+          // intentionally leave isAuthenticated false
+        }),
+      clearPendingRegistration: () =>
+        set({
+          pendingToken: null,
+          pendingUser: null,
+        }),
+
+      confirmPendingRegistration: () => {
+        const { pendingToken, pendingUser } = get();
+        if (!pendingToken || !pendingUser) return;
+
+        set({
+          token: pendingToken,
+          user: {
+            ...pendingUser,
+            isEmailVerified: true, // phone verified
+          },
+          isAuthenticated: true,
+          pendingToken: null,
+          pendingUser: null,
+        });
       },
     }),
     {

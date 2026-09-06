@@ -14,7 +14,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-import { AuthHeader } from "@/components/AuthHeader";
 import { CustomButton } from "@/components/CustomButton";
 import { OTPInput } from "@/components/OTPInput";
 import { Colors } from "@/constants/theme";
@@ -37,6 +36,13 @@ export default function VerifyEmailScreen() {
 
   const updateUser = useAuthStore((state) => state.updateUser);
   const logout = useAuthStore((state) => state.logout);
+  const confirmPendingRegistration = useAuthStore(
+    (state) => state.confirmPendingRegistration,
+  );
+
+  const clearPendingRegistration = useAuthStore(
+    (state) => state.clearPendingRegistration,
+  );
 
   const [otpCode, setOtpCode] = useState("");
 
@@ -55,25 +61,16 @@ export default function VerifyEmailScreen() {
     setErrorMessage("");
   };
 
-  /**
-   * Exit path for this screen.
-   * - Signup flow: user is authenticated but not verified. Tabs would
-   *   bounce them back here if we only navigated away. Logout first so
-   *   they land cleanly on login and are not trapped.
-   * - Forgot-password flow: user is not in that verified-guard state,
-   *   so a normal back to the previous screen is enough.
-   */
   const handleExit = () => {
-    if (isBusy) return;
+    if (isBusy) return; // NO CHANGES
 
     if (isSignupFlow) {
-      logout();
+      // UPDATED: clear pending register state, then go to login
+      clearPendingRegistration();
       router.replace("/(auth)/login");
       return;
     }
 
-    // Prefer back when the screen was pushed (forgot-password).
-    // Fall back to login if there is nothing to go back to.
     if (router.canGoBack()) {
       router.back();
     } else {
@@ -100,14 +97,9 @@ export default function VerifyEmailScreen() {
       const result = await verifyResetOtp(phoneNumber, otpCode);
 
       if (isSignupFlow) {
-        // Phone is verified, the backend already flipped isEmailVerified
-        // to true in the database. Mirror that in the local store so the
-        // (tabs) guard opens up immediately, then send the user into the app.
-        updateUser({ isEmailVerified: true });
+        confirmPendingRegistration();
         router.replace("/(tabs)");
       } else {
-        // Original forgot-password flow: continue to the reset-password
-        // screen with the short-lived resetToken.
         router.push({
           pathname: "/reset-password",
           params: { resetToken: result.resetToken },
@@ -152,12 +144,12 @@ export default function VerifyEmailScreen() {
       >
         {/* Back / exit is always available so the user is never trapped.
             Disabled only while a network action is running. */}
-        <AuthHeader
+        {/* <AuthHeader
           title="CropGuardian"
-          showBackButton={true}
+          // showBackButton={true}
           disabled={isBusy}
-          onBackPress={handleExit}
-        />
+          // onBackPress={handleExit}
+        /> */}
 
         {/* Logo Placeholder */}
         <View style={styles.logoContainer}>

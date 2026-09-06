@@ -34,7 +34,6 @@ import {
   GHANA_REGIONS,
   GhanaRegion,
 } from "@/utils/utilities";
-import { InteractionManager } from "react-native";
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -209,10 +208,7 @@ export default function SignUpScreen() {
 
     setIsLoading(true);
     try {
-      //  data.phoneNumber is now always a non-empty digit string
-      // (the Zod schema guarantees this), so the `if (data.phoneNumber)`
-      // guard that used to wrap this is no longer needed.
-      const digits = data.phoneNumber.replace(/^0/, ""); // remove leading 0
+      const digits = data.phoneNumber.replace(/^0/, "");
       const formattedPhone = `+233${digits}`;
 
       const payload = {
@@ -250,7 +246,6 @@ export default function SignUpScreen() {
 
       const otpAlreadySent = response.data?.otpSent === true;
       if (!otpAlreadySent) {
-        //  fallback resend path
         try {
           await forgotPassword(formattedPhone);
         } catch (err) {
@@ -260,10 +255,6 @@ export default function SignUpScreen() {
 
       Keyboard.dismiss();
 
-      await new Promise<void>((resolve) => {
-        InteractionManager.runAfterInteractions(() => resolve());
-      });
-
       router.replace({
         pathname: "/(auth)/verify-email",
         params: {
@@ -271,13 +262,15 @@ export default function SignUpScreen() {
           origin: "signup",
         },
       });
+
+      // success: do not unlock form. screen is leaving.
+      return;
     } catch (error: any) {
       console.error("Signup error:", error);
       const errorMsg =
         error.response?.data?.message ||
         "An error occurred during sign up. Please try again.";
       Alert.alert("Registration Failed", errorMsg);
-    } finally {
       setIsLoading(false);
     }
   };

@@ -8,11 +8,13 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 import * as Notifications from "expo-notifications";
-import { Stack, useRouter } from "expo-router";
+import { SplashScreen, Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef } from "react";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import "react-native-reanimated";
+
+SplashScreen.preventAutoHideAsync();
 
 // Without this, Android/iOS won't show a banner while the app is in the foreground.
 Notifications.setNotificationHandler({

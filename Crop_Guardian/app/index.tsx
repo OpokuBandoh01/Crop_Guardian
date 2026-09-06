@@ -1,12 +1,11 @@
 // app/index.tsx
 
 import { useRouter } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { ActivityIndicator } from "react-native";
 
 import { useAuthStore } from "@/stores/authStore";
 import { useOnboardingStore } from "@/stores/onboardingStore";
-import Animated, { FadeIn } from "react-native-reanimated";
 
 export default function IndexScreen() {
   const router = useRouter();
@@ -18,9 +17,11 @@ export default function IndexScreen() {
   const authHydrated = useAuthStore((state) => state.hasHydrated);
 
   useEffect(() => {
+    // Wait until both stores have finished loading from storage
     if (!onboardingHydrated || !authHydrated) return;
 
     let destination: string;
+
     if (isAuthenticated) {
       destination = "/(tabs)";
     } else if (!hasOnboarded) {
@@ -29,19 +30,17 @@ export default function IndexScreen() {
       destination = "/(auth)/login";
     }
 
-    const timer = setTimeout(() => {
+    // Hide the native splash as soon as we know where to go
+    // This gives a clean transition from the FarmDoc logo to the next screen
+    const hideAndNavigate = async () => {
+      await SplashScreen.hideAsync();
       router.replace(destination as any);
-    }, 0);
+    };
 
-    return () => clearTimeout(timer);
-  }, [hasOnboarded, onboardingHydrated, isAuthenticated, authHydrated]);
+    hideAndNavigate();
+  }, [hasOnboarded, onboardingHydrated, isAuthenticated, authHydrated, router]);
 
-  return (
-    <Animated.View
-      entering={FadeIn.duration(250)}
-      style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
-    >
-      <ActivityIndicator size="large" />
-    </Animated.View>
-  );
+  //  Return null instead of a spinner.
+  // The native splash (FarmDoc logo) stays visible until we hide it above.
+  return null;
 }

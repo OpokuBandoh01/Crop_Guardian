@@ -1,13 +1,13 @@
 {
   "expo": {
     "name": "FarmDoc",
-    "slug": "farmdoc",
+    "slug": "Crop_Guardian",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "farmdoc",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.becewassce.prep",

@@ -6,7 +6,9 @@ import {
   fetchCommunityTags,
   fetchFollowers,
   fetchFollowing,
+  fetchFollowingPosts,
   fetchMyPosts,
+  fetchPopularPosts,
   fetchSavedPosts,
   followCommunityUser,
   likeCommunityPost,
@@ -28,6 +30,8 @@ const POSTS_PER_PAGE = 10;
 const SAVED_PER_PAGE = 10;
 const MY_POSTS_PER_PAGE = 10;
 const CONNECTIONS_PER_PAGE = 20;
+
+type FeedTab = "latest" | "following" | "popular";
 
 interface CommunityStore {
   tags: CommunityTag[];
@@ -86,6 +90,8 @@ interface CommunityStore {
   followingListPage: number;
   followingListTotalPages: number;
 
+  activeFeed: FeedTab;
+
   fetchTags: () => Promise<void>;
   fetchPosts: (options?: { reset?: boolean }) => Promise<void>;
   refreshPosts: () => Promise<void>;
@@ -119,6 +125,7 @@ interface CommunityStore {
   ) => Promise<void>;
   refreshFollowingList: (userId: string) => Promise<void>;
   loadMoreFollowing: (userId: string) => Promise<void>;
+  setActiveFeed: (feed: FeedTab) => void;
 }
 
 export const useCommunityStore = create<CommunityStore>()(
@@ -176,6 +183,7 @@ export const useCommunityStore = create<CommunityStore>()(
       followingListError: null,
       followingListPage: 1,
       followingListTotalPages: 1,
+      activeFeed: "latest",
 
       fetchTags: async () => {
         set({ tagsLoading: true });
@@ -193,7 +201,7 @@ export const useCommunityStore = create<CommunityStore>()(
 
       fetchPosts: async (options) => {
         const reset = options?.reset ?? true;
-        const { selectedTagSlug, searchQuery } = get();
+        const { selectedTagSlug, searchQuery, activeFeed } = get();
         const isFirstLoad = reset && get().posts.length === 0;
         set({
           postsLoading: isFirstLoad,
@@ -201,15 +209,23 @@ export const useCommunityStore = create<CommunityStore>()(
         });
 
         try {
-          const res = await fetchCommunityPosts({
+          const params = {
             page: reset ? 1 : get().page,
             limit: POSTS_PER_PAGE,
             tag: selectedTagSlug ?? undefined,
             q: searchQuery.trim() ? searchQuery.trim() : undefined,
-          });
+          };
+
+          let res;
+          if (activeFeed === "following") {
+            res = await fetchFollowingPosts(params);
+          } else if (activeFeed === "popular") {
+            res = await fetchPopularPosts(params);
+          } else {
+            res = await fetchCommunityPosts(params);
+          }
 
           if (res.success) {
-            //seed followingUserIds from author.isFollowing on this page
             const followUpdates: Record<string, boolean> = {
               ...get().followingUserIds,
             };
@@ -226,9 +242,19 @@ export const useCommunityStore = create<CommunityStore>()(
               followingUserIds: followUpdates,
             }));
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error("Failed to fetch community posts:", err);
-          set({ postsError: "Could not load posts. Pull down to try again." });
+          // Guest hitting Following will get 401 – show clear message
+          const status = err?.response?.status;
+          if (status === 401 && get().activeFeed === "following") {
+            set({
+              postsError: "Please log in to see posts from people you follow.",
+            });
+          } else {
+            set({
+              postsError: "Could not load posts. Pull down to try again.",
+            });
+          }
         } finally {
           set({ postsLoading: false });
         }
@@ -770,6 +796,18 @@ export const useCommunityStore = create<CommunityStore>()(
         });
         await get().fetchFollowingList(userId, { reset: false });
         set({ followingListLoadingMore: false });
+      },
+
+      setActiveFeed: (feed) => {
+        if (get().activeFeed === feed) return;
+        set({
+          activeFeed: feed,
+          posts: [],
+          page: 1,
+          totalPages: 1,
+          postsError: null,
+        });
+        get().fetchPosts({ reset: true });
       },
     }),
     {

@@ -2,8 +2,8 @@
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useCommunityStore } from "@/stores/communityStore";
 import { useAuthStore } from "@/stores/authStore";
+import { useCommunityStore } from "@/stores/communityStore";
 import type { ConnectionUser } from "@/types/community";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -109,7 +109,18 @@ export default function ConnectionsScreen() {
           },
         ]}
       >
-        <View style={styles.rowLeft}>
+        <TouchableOpacity
+          style={styles.rowLeft}
+          activeOpacity={0.7}
+          onPress={() =>
+            router.push({
+              pathname: "/user/[id]",
+              params: { id: item.id },
+            })
+          }
+          disabled={busy}
+        >
+          {/* avatar + name block unchanged */}
           {item.avatarUrl ? (
             <Image source={{ uri: item.avatarUrl }} style={styles.avatar} />
           ) : (
@@ -145,7 +156,7 @@ export default function ConnectionsScreen() {
               </Text>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* Do not show follow button for yourself */}
         {userId !== item.id && (

@@ -17,6 +17,8 @@ import type {
   GetPostsResponse,
   GetSavedPostsResponse,
   GetTagsResponse,
+  GetUserPostsParams,
+  GetUserProfileResponse,
 } from "@/types/community";
 
 export async function fetchCommunityTags(): Promise<GetTagsResponse> {
@@ -247,6 +249,46 @@ export async function fetchFollowing(
 ): Promise<GetConnectionsResponse> {
   const res = await API.get<GetConnectionsResponse>(
     `/api/community/users/${userId}/following`,
+    { params },
+  );
+  return res.data;
+}
+
+export async function fetchFollowingPosts(
+  params: GetPostsParams,
+): Promise<GetPostsResponse> {
+  const res = await API.get<GetPostsResponse>(
+    "/api/community/posts/following",
+    {
+      params,
+    },
+  );
+  return res.data;
+}
+
+export async function fetchPopularPosts(
+  params: GetPostsParams,
+): Promise<GetPostsResponse> {
+  const res = await API.get<GetPostsResponse>("/api/community/posts/popular", {
+    params,
+  });
+  return res.data;
+}
+
+export async function fetchUserProfile(
+  userId: string,
+): Promise<GetUserProfileResponse> {
+  const res = await API.get<GetUserProfileResponse>(
+    `/api/community/users/${userId}`,
+  );
+  return res.data;
+}
+export async function fetchUserPosts(
+  userId: string,
+  params?: GetUserPostsParams,
+): Promise<GetPostsResponse> {
+  const res = await API.get<GetPostsResponse>(
+    `/api/community/users/${userId}/posts`,
     { params },
   );
   return res.data;

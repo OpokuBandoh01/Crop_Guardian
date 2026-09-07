@@ -32,6 +32,7 @@ export default function ProfileScreen() {
   const theme = Colors[colorScheme];
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [reputationModalVisible, setReputationModalVisible] = useState(false);
 
   const logoutUser = useAuthStore((state) => state.logout);
 
@@ -50,6 +51,10 @@ export default function ProfileScreen() {
   const planSubtitle = isPaid
     ? `Farmer plan active until ${formatPlanEndDate(status?.endsAt)}`
     : `${status?.remainingFreeScans ?? 0} of 5 free scans left this month`;
+
+  const reputationScore = user?.profile?.reputationScore ?? 0;
+  const helpfulAnswersCount = user?.profile?.helpfulAnswersCount ?? 0;
+  const solvedAnswersCount = user?.profile?.solvedAnswersCount ?? 0;
 
   const handlePress = (screen: string) => {
     if (screen === "Log Out") {
@@ -216,6 +221,22 @@ export default function ProfileScreen() {
               <Text style={styles.farmerName}>
                 {user?.profile?.fullName || "Farmer Name"}
               </Text>
+
+              <TouchableOpacity
+                style={styles.reputationChip}
+                onPress={() => setReputationModalVisible(true)}
+                activeOpacity={0.7}
+                disabled={loading || isLoggingOut}
+                accessibilityRole="button"
+                accessibilityLabel={`Reputation score ${reputationScore}. Tap for details.`}
+              >
+                <Ionicons
+                  name="shield-checkmark"
+                  size={moderateScale(12)}
+                  color="#A3C89E"
+                />
+                <Text style={styles.reputationChipText}>{reputationScore}</Text>
+              </TouchableOpacity>
 
               <View style={styles.cropBadge}>
                 <Ionicons
@@ -556,6 +577,137 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={reputationModalVisible}
+        onRequestClose={() => setReputationModalVisible(false)}
+      >
+        <View
+          style={[styles.modalBackdrop, { backgroundColor: backdropBgColor }]}
+        >
+          {/* locks background interaction while open */}
+          <BlurView
+            style={StyleSheet.absoluteFill}
+            intensity={100}
+            tint={colorScheme === "light" ? "light" : "dark"}
+          />
+
+          <View style={[styles.modalCard, { backgroundColor: theme.surface }]}>
+            <View style={styles.reputationModalHeader}>
+              <Ionicons
+                name="shield-checkmark"
+                size={moderateScale(28)}
+                color={theme.primary}
+              />
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                Community reputation
+              </Text>
+            </View>
+
+            <Text
+              style={[
+                styles.modalDescription,
+                { color: colorScheme === "light" ? "#4B5563" : "#9BA1A6" },
+              ]}
+            >
+              Your score grows when other farmers mark your comments as Helpful
+              or Solved. Helpful answers add 1 point. Solved answers add 2
+              points. Unmarking removes those points (score never goes below
+              zero).
+            </Text>
+
+            <View style={styles.reputationBreakdown}>
+              <View style={styles.reputationBreakdownRow}>
+                <Text
+                  style={[
+                    styles.reputationBreakdownLabel,
+                    { color: colorScheme === "light" ? "#687076" : "#9BA1A6" },
+                  ]}
+                >
+                  Helpful answers
+                </Text>
+                <Text
+                  style={[
+                    styles.reputationBreakdownValue,
+                    { color: theme.text },
+                  ]}
+                >
+                  {helpfulAnswersCount}
+                </Text>
+              </View>
+              <View style={styles.reputationBreakdownRow}>
+                <Text
+                  style={[
+                    styles.reputationBreakdownLabel,
+                    { color: colorScheme === "light" ? "#687076" : "#9BA1A6" },
+                  ]}
+                >
+                  Solved answers
+                </Text>
+                <Text
+                  style={[
+                    styles.reputationBreakdownValue,
+                    { color: theme.text },
+                  ]}
+                >
+                  {solvedAnswersCount}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.reputationBreakdownRow,
+                  styles.reputationTotalRow,
+                  {
+                    borderTopColor:
+                      colorScheme === "light" ? "#E5E7EB" : "#374151",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.reputationBreakdownLabel,
+                    { color: theme.text, fontWeight: "700" },
+                  ]}
+                >
+                  Total reputation
+                </Text>
+                <Text
+                  style={[
+                    styles.reputationBreakdownValue,
+                    { color: theme.primary, fontWeight: "700" },
+                  ]}
+                >
+                  {reputationScore}
+                </Text>
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.modalDivider,
+                {
+                  backgroundColor:
+                    colorScheme === "light" ? "#E5E7EB" : "#374151",
+                },
+              ]}
+            />
+
+            <TouchableOpacity
+              style={styles.reputationCloseButton}
+              onPress={() => setReputationModalVisible(false)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[styles.reputationCloseText, { color: theme.primary }]}
+              >
+                Got it
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -744,5 +896,58 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(14),
     fontWeight: "700",
     color: "#EF4444",
+  },
+  //NEW ADDITION: reputation chip under the name
+  reputationChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: scale(4),
+    marginTop: verticalScale(4),
+    marginBottom: verticalScale(2),
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(3),
+    borderRadius: moderateScale(12),
+    backgroundColor: "rgba(163, 200, 158, 0.18)",
+  },
+  reputationChipText: {
+    fontSize: moderateScale(12),
+    fontWeight: "700",
+    color: "#A3C89E",
+  },
+  reputationModalHeader: {
+    alignItems: "center",
+    gap: verticalScale(8),
+    marginBottom: verticalScale(8),
+  },
+  reputationBreakdown: {
+    marginTop: verticalScale(12),
+    marginBottom: verticalScale(4),
+    gap: verticalScale(10),
+  },
+  reputationBreakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  reputationTotalRow: {
+    borderTopWidth: 1,
+    paddingTop: verticalScale(10),
+    marginTop: verticalScale(4),
+  },
+  reputationBreakdownLabel: {
+    fontSize: moderateScale(13),
+  },
+  reputationBreakdownValue: {
+    fontSize: moderateScale(14),
+    fontWeight: "600",
+  },
+  reputationCloseButton: {
+    paddingVertical: verticalScale(14),
+    alignItems: "center",
+  },
+  reputationCloseText: {
+    fontSize: moderateScale(16),
+    fontWeight: "600",
   },
 });

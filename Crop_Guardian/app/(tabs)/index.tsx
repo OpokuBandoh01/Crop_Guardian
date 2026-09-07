@@ -525,7 +525,7 @@ export default function HomeScreen() {
           </View>
 
           {/* Card 3: Weather Alert */}
-          <View
+          {/* <View
             style={[
               styles.bottomCard,
               styles.weatherAlertCard,
@@ -557,7 +557,7 @@ export default function HomeScreen() {
                 color="#005B66"
               />
             </TouchableOpacity>
-          </View>
+          </View> */}
         </ScrollView>
       </ScrollView>
     </SafeAreaView>

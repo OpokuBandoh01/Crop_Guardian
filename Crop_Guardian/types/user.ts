@@ -1,12 +1,5 @@
 // types/user.ts
-// Central place for the shapes returned by GET /api/auth/me,
-// PUT /api/auth/profile, and PUT /api/auth/avatar. Defining these once
-// means if the backend response ever changes, we fix it in one file
-// instead of hunting through every screen that reads user data.
 
-// A union type instead of plain `string` for CropType means TypeScript
-// will flag a typo like "MAIZEE" at compile time, before it ever reaches
-// the network.
 export type CropType =
   | "MAIZE"
   | "TOMATO"
@@ -33,6 +26,10 @@ export interface UserProfile {
   avatarUrl: string | null;
   location: UserLocation | null;
   preferredCrops: CropType[];
+  //NEW ADDITION: community reputation fields from Profile model
+  reputationScore?: number;
+  helpfulAnswersCount?: number;
+  solvedAnswersCount?: number;
 }
 
 export interface UserProfileData {

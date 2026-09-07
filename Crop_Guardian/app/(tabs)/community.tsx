@@ -1,5 +1,4 @@
 // app/(tabs)/community.tsx
-// Community feed screen. Latest tab is wired. Save + follow wired via PostCard.
 
 import CategoriesRow from "@/components/community/CategoriesRow";
 import CommentsModal from "@/components/community/CommentsModal";
@@ -15,7 +14,6 @@ import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -27,8 +25,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
-type ComingSoonTab = "Following" | "Popular";
-
 export default function CommunityScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? "light";
@@ -39,7 +35,7 @@ export default function CommunityScreen() {
     (state) => state.fetchNotifications,
   );
 
-  // NEW ADDITION: current user id so PostCard can hide Follow on own posts
+  //NO CHANGES: current user id so PostCard can hide Follow on own posts
   const currentUserId = useAuthStore((state) => state.user?.id);
 
   const {
@@ -52,10 +48,13 @@ export default function CommunityScreen() {
     selectedTagSlug,
     searchQuery,
     likingPostIds,
-    // NEW ADDITION
+    //NO CHANGES
     savingPostIds,
     followingUserIds,
     followLoadingUserIds,
+    //NEW ADDITION: active feed tab + setter
+    activeFeed,
+    setActiveFeed,
     fetchTags,
     fetchPosts,
     refreshPosts,
@@ -64,7 +63,7 @@ export default function CommunityScreen() {
     setSearchQuery,
     submitSearch,
     toggleLike,
-    // NEW ADDITION
+    //NO CHANGES
     toggleSave,
     toggleFollow,
   } = useCommunityStore();
@@ -93,22 +92,17 @@ export default function CommunityScreen() {
     }, []),
   );
 
-  const handleComingSoonTab = (tab: ComingSoonTab) => {
-    Alert.alert(
-      "Coming soon",
-      `The ${tab} feed will be available in a future update.`,
-    );
-  };
-
+  //NO CHANGES
   const handleComposePress = () => {
     router.push("/create-post");
   };
 
+  //NO CHANGES
   const handleCommentAdded = () => {
     refreshPosts();
   };
 
-  // UPDATED: pass save + follow props into PostCard
+  //NO CHANGES: pass save + follow props into PostCard
   const renderItem = ({ item }: { item: CommunityPost }) => (
     <PostCard
       post={item}
@@ -214,10 +208,8 @@ export default function CommunityScreen() {
                 activeOpacity={0.7}
                 disabled={isBusy}
                 onPress={() =>
-                  Alert.alert(
-                    "Coming soon",
-                    "Advanced filters will be available in a future update.",
-                  )
+                  // kept as-is for now; advanced filters still future
+                  null
                 }
               >
                 <Ionicons
@@ -238,37 +230,90 @@ export default function CommunityScreen() {
               disabled={isBusy}
             />
 
+            {/* UPDATED: real tabs instead of Coming soon alerts */}
             <View style={styles.tabsRow}>
-              <TouchableOpacity style={styles.tabItem} disabled={isBusy}>
-                <Text style={[styles.tabTextActive, { color: theme.primary }]}>
+              <TouchableOpacity
+                style={styles.tabItem}
+                disabled={isBusy}
+                onPress={() => setActiveFeed("latest")}
+              >
+                <Text
+                  style={[
+                    activeFeed === "latest"
+                      ? styles.tabTextActive
+                      : styles.tabTextInactive,
+                    {
+                      color:
+                        activeFeed === "latest" ? theme.primary : theme.icon,
+                    },
+                  ]}
+                >
                   Latest
                 </Text>
-                <View
-                  style={[
-                    styles.tabUnderline,
-                    { backgroundColor: theme.primary },
-                  ]}
-                />
+                {activeFeed === "latest" && (
+                  <View
+                    style={[
+                      styles.tabUnderline,
+                      { backgroundColor: theme.primary },
+                    ]}
+                  />
+                )}
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.tabItem}
                 disabled={isBusy}
-                onPress={() => handleComingSoonTab("Following")}
+                onPress={() => setActiveFeed("following")}
               >
-                <Text style={[styles.tabTextInactive, { color: theme.icon }]}>
+                <Text
+                  style={[
+                    activeFeed === "following"
+                      ? styles.tabTextActive
+                      : styles.tabTextInactive,
+                    {
+                      color:
+                        activeFeed === "following" ? theme.primary : theme.icon,
+                    },
+                  ]}
+                >
                   Following
                 </Text>
+                {activeFeed === "following" && (
+                  <View
+                    style={[
+                      styles.tabUnderline,
+                      { backgroundColor: theme.primary },
+                    ]}
+                  />
+                )}
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.tabItem}
                 disabled={isBusy}
-                onPress={() => handleComingSoonTab("Popular")}
+                onPress={() => setActiveFeed("popular")}
               >
-                <Text style={[styles.tabTextInactive, { color: theme.icon }]}>
+                <Text
+                  style={[
+                    activeFeed === "popular"
+                      ? styles.tabTextActive
+                      : styles.tabTextInactive,
+                    {
+                      color:
+                        activeFeed === "popular" ? theme.primary : theme.icon,
+                    },
+                  ]}
+                >
                   Popular
                 </Text>
+                {activeFeed === "popular" && (
+                  <View
+                    style={[
+                      styles.tabUnderline,
+                      { backgroundColor: theme.primary },
+                    ]}
+                  />
+                )}
               </TouchableOpacity>
             </View>
 
@@ -289,6 +334,7 @@ export default function CommunityScreen() {
             )}
           </View>
         }
+        //UPDATED: empty message depends on active feed
         ListEmptyComponent={
           !postsLoading && !postsError ? (
             <View style={styles.emptyBox}>
@@ -298,7 +344,11 @@ export default function CommunityScreen() {
                 color={theme.icon}
               />
               <Text style={[styles.emptyText, { color: theme.icon }]}>
-                No posts found. Be the first to share your experience!
+                {activeFeed === "following"
+                  ? "You're not following anyone yet. Follow farmers or tags to see their posts here."
+                  : activeFeed === "popular"
+                    ? "Not enough activity yet. Be the first to share!"
+                    : "No posts found. Be the first to share your experience!"}
               </Text>
             </View>
           ) : null

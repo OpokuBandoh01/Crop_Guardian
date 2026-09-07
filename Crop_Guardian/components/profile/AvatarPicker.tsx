@@ -8,11 +8,11 @@ import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import React, { useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { moderateScale } from "react-native-size-matters";
 
@@ -79,9 +79,7 @@ export function AvatarPicker({
     >
       <Image
         source={
-          avatarUrl
-            ? { uri: avatarUrl }
-            : require("@/assets/images/thefarmer.png")
+          avatarUrl ? { uri: avatarUrl } : require("@/assets/images/oip.jpg")
         }
         style={[
           styles.avatar,

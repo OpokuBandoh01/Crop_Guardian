@@ -79,6 +79,7 @@ export default function RootLayout() {
             name="detection/[id]"
             options={{ headerShown: false }}
           />
+          <Stack.Screen name="user/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="weather" options={{ headerShown: false }} />
           <Stack.Screen name="listening" options={{ headerShown: false }} />
           <Stack.Screen name="personal-info" options={{ headerShown: false }} />

@@ -5,6 +5,8 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import type { CommunityPost } from "@/types/community";
 import { formatRelativeTime } from "@/utils/timeFormat";
 import { Ionicons } from "@expo/vector-icons";
+//NEW ADDITION: navigate to public user profile
+import { useRouter } from "expo-router";
 import React from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
@@ -40,6 +42,8 @@ export default function PostCard({
 }: PostCardProps) {
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
+  //NEW ADDITION
+  const router = useRouter();
 
   const isOwnPost = Boolean(currentUserId && post.author.id === currentUserId);
 
@@ -49,6 +53,15 @@ export default function PostCard({
     .slice(0, 2)
     .join("")
     .toUpperCase();
+
+  //UPDATED: typed expo-router navigation to public profile
+  const handleAuthorPress = (e: { stopPropagation: () => void }) => {
+    stopBubble(e);
+    router.push({
+      pathname: "/user/[id]",
+      params: { id: post.author.id },
+    });
+  };
 
   return (
     <TouchableOpacity
@@ -61,7 +74,12 @@ export default function PostCard({
     >
       {/* Header: avatar + name + reputation + meta + Follow */}
       <View style={styles.headerRow}>
-        <View style={styles.headerLeft}>
+        {/* UPDATED: entire left header is tappable → user profile */}
+        <TouchableOpacity
+          style={styles.headerLeft}
+          activeOpacity={0.7}
+          onPress={handleAuthorPress}
+        >
           {post.author.avatarUrl ? (
             <Image
               source={{ uri: post.author.avatarUrl }}
@@ -106,9 +124,9 @@ export default function PostCard({
               {formatRelativeTime(post.createdAt)}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
-        {/*  Follow (green) / Following (text only) / hidden on own posts */}
+        {/* NO CHANGES: Follow (green) / Following (text only) / hidden on own posts */}
         {!isOwnPost &&
           (isFollowing ? (
             <TouchableOpacity
@@ -144,12 +162,12 @@ export default function PostCard({
           ))}
       </View>
 
-      {/* Post body */}
+      {/* NO CHANGES: Post body */}
       <Text style={[styles.content, { color: theme.text }]} numberOfLines={4}>
         {post.content}
       </Text>
 
-      {/* Images (up to 3) */}
+      {/* NO CHANGES: Images (up to 3) */}
       {post.imageUrls.length > 0 && (
         <View style={styles.imagesRow}>
           {post.imageUrls.slice(0, 3).map((url, idx) => (
@@ -166,7 +184,7 @@ export default function PostCard({
         </View>
       )}
 
-      {/* Tags */}
+      {/* NO CHANGES: Tags */}
       {post.tags.length > 0 && (
         <View style={styles.tagsRow}>
           {post.tags.map((tag) => (
@@ -188,7 +206,7 @@ export default function PostCard({
         </View>
       )}
 
-      {/* Footer: like, comment, save */}
+      {/* NO CHANGES: Footer: like, comment, save */}
       <View style={styles.footerRow}>
         <TouchableOpacity
           style={styles.footerAction}
@@ -227,7 +245,6 @@ export default function PostCard({
           </Text>
         </TouchableOpacity>
 
-        {/*  bookmark + savesCount */}
         <TouchableOpacity
           style={styles.footerAction}
           activeOpacity={0.7}
@@ -330,7 +347,7 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(11),
     fontWeight: "700",
   },
-  // NEW ADDITION: Following = text only, no green background / border
+  // NO CHANGES
   followingText: {
     fontSize: moderateScale(12),
     fontWeight: "600",

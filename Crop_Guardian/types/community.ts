@@ -170,3 +170,34 @@ export interface GetConnectionsParams {
   page?: number;
   limit?: number;
 }
+
+export interface PublicUserProfile {
+  id: string;
+  role: string;
+  profile: {
+    fullName: string;
+    avatarUrl: string | null;
+    preferredCrops: string[];
+    reputationScore: number;
+    helpfulAnswersCount: number;
+    solvedAnswersCount: number;
+  };
+  stats: {
+    postsCount: number;
+    followersCount: number;
+    followingCount: number;
+  };
+  isFollowing?: boolean;
+  isSelf?: boolean;
+}
+
+export interface GetUserProfileResponse {
+  success: boolean;
+  message: string;
+  data: PublicUserProfile;
+}
+
+export interface GetUserPostsParams {
+  page?: number;
+  limit?: number;
+}

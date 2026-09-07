@@ -525,7 +525,7 @@ export default function CommentsModal({
               </TouchableOpacity>
             </View>
           </View>
-
+          {/* 
           <TouchableOpacity
             style={[styles.miniFollow, { backgroundColor: theme.primary }]}
             activeOpacity={0.8}
@@ -538,7 +538,7 @@ export default function CommentsModal({
             }
           >
             <Text style={styles.miniFollowText}>Follow</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         {(item.replies ?? []).map((reply) => {
@@ -679,7 +679,7 @@ export default function CommentsModal({
                 </Text>
               </View>
             </View>
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={[styles.followBtn, { backgroundColor: theme.primary }]}
               activeOpacity={0.8}
               disabled={submitting || loading}
@@ -691,7 +691,7 @@ export default function CommentsModal({
               }
             >
               <Text style={styles.followBtnText}>Follow</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
 
           <Text style={[styles.postContent, { color: theme.text }]}>
